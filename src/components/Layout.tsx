@@ -1,13 +1,20 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, Package, Bell, History, Tag,
   Zap, BarChart2, Plug, Settings, CreditCard,
-  HelpCircle, LogOut, ShoppingBag, Search, Moon, ChevronDown
+  HelpCircle, LogOut, ShoppingBag, Search, Moon, Sun,
+  ChevronDown, TrendingDown, ExternalLink, User, X,
 } from 'lucide-react';
 import { logout } from '../api/auth';
+import { getAlerts } from '../api/tracking';
 import { useAuthStore } from '../store/auth';
 import toast from 'react-hot-toast';
+
+interface Alert {
+  id: string; target_price: string; triggered_price: string;
+  sent_at: string; title: string | null; url: string; asin: string;
+}
 
 const navItems = [
   { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
@@ -28,6 +35,52 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { user, clearAuth } = useAuthStore();
 
+  /* ── theme ── */
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('pt-theme') === 'dark');
+  const toggleDark = () => setIsDark(d => {
+    const next = !d;
+    localStorage.setItem('pt-theme', next ? 'dark' : 'light');
+    return next;
+  });
+
+  /* ── search ── */
+  const [searchVal, setSearchVal] = useState('');
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchVal.trim()) {
+      navigate(`/products?q=${encodeURIComponent(searchVal.trim())}`);
+      setSearchVal('');
+    }
+  };
+
+  /* ── notifications dropdown ── */
+  const [showNotifs, setShowNotifs]   = useState(false);
+  const [alerts, setAlerts]           = useState<Alert[]>([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const notifsRef = useRef<HTMLDivElement>(null);
+
+  const openNotifs = async () => {
+    setShowNotifs(v => !v);
+    if (alerts.length === 0) {
+      setLoadingAlerts(true);
+      try { setAlerts(await getAlerts()); } catch {}
+      setLoadingAlerts(false);
+    }
+  };
+
+  /* ── profile dropdown ── */
+  const [showProfile, setShowProfile] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  /* ── close dropdowns on outside click ── */
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (notifsRef.current && !notifsRef.current.contains(e.target as Node)) setShowNotifs(false);
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setShowProfile(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const handleLogout = async () => {
     try { await logout(); } catch {}
     clearAuth();
@@ -36,18 +89,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const displayName = user?.email?.split('@')[0] ?? 'User';
-  const initials = displayName[0]?.toUpperCase() ?? 'U';
-  const [searchVal, setSearchVal] = useState('');
+  const initials    = displayName[0]?.toUpperCase() ?? 'U';
 
-  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchVal.trim()) {
-      navigate(`/products?q=${encodeURIComponent(searchVal.trim())}`);
-      setSearchVal('');
-    }
+  /* ── theme colour tokens ── */
+  const t = {
+    mainBg:      isDark ? '#0d0f1e' : '#f0f2f8',
+    headerBg:    isDark ? '#13152e' : '#fff',
+    headerBorder:isDark ? 'rgba(255,255,255,.07)' : '#eef0f6',
+    searchBg:    isDark ? '#1e2140' : '#f8f9fc',
+    searchBorder:isDark ? 'rgba(255,255,255,.1)' : '#eef0f6',
+    searchText:  isDark ? '#e5e7eb' : '#374151',
+    iconBtn:     isDark ? '#1e2140' : '#f8f9fc',
+    iconColor:   isDark ? '#9ca3af' : '#6b7280',
+    nameColor:   isDark ? '#e5e7eb' : '#1f2937',
+    divider:     isDark ? 'rgba(255,255,255,.07)' : '#eef0f6',
+    dropBg:      isDark ? '#1e2140' : '#fff',
+    dropBorder:  isDark ? 'rgba(255,255,255,.1)' : '#eef0f6',
+    dropText:    isDark ? '#e5e7eb' : '#111827',
+    dropSub:     isDark ? '#6b7280' : '#9ca3af',
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: t.mainBg, transition: 'background .2s' }}>
+
       {/* ── Sidebar ── */}
       <aside style={{
         width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column',
@@ -57,8 +121,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '20px 18px 18px' }}>
           <div style={{
-            width: 38, height: 38, borderRadius: 11, background: '#f59e0b',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            width: 38, height: 38, borderRadius: 11, background: '#f59e0b', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 4px 10px rgba(245,158,11,.35)',
           }}>
             <ShoppingBag size={18} color="white" />
@@ -127,63 +191,242 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* ── Main ── */}
       <div style={{ marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
         {/* Header */}
         <header style={{
           display: 'flex', alignItems: 'center', gap: 14,
-          padding: '11px 28px', background: '#fff',
-          borderBottom: '1px solid #eef0f6',
+          padding: '11px 28px',
+          background: t.headerBg, borderBottom: `1px solid ${t.headerBorder}`,
           position: 'sticky', top: 0, zIndex: 20,
           boxShadow: '0 1px 6px rgba(0,0,0,.05)',
+          transition: 'background .2s, border-color .2s',
         }}>
+
           {/* Search */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 9,
-            background: '#f8f9fc', border: '1.5px solid #eef0f6',
+            background: t.searchBg, border: `1.5px solid ${t.searchBorder}`,
             borderRadius: 12, padding: '9px 16px', flex: 1, maxWidth: 500,
+            transition: 'background .2s',
           }}>
-            <Search size={14} color="#9ca3af" />
+            <Search size={14} color={t.iconColor} />
             <input
               type="text"
               value={searchVal}
               onChange={e => setSearchVal(e.target.value)}
               onKeyDown={handleSearch}
-              placeholder="Search any product or paste Amazon link..."
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: '#374151' }}
+              placeholder="Search any product or paste Amazon link…"
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: t.searchText }}
             />
-            <kbd style={{ fontSize: 10.5, color: '#9ca3af', background: '#e9ecf0', padding: '2px 7px', borderRadius: 5, fontFamily: 'monospace', letterSpacing: .5 }}>⌘K</kbd>
+            {searchVal && (
+              <button onClick={() => setSearchVal('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 2 }}>
+                <X size={12} color={t.iconColor} />
+              </button>
+            )}
+            <kbd style={{ fontSize: 10.5, color: t.iconColor, background: isDark ? '#252848' : '#e9ecf0', padding: '2px 7px', borderRadius: 5, fontFamily: 'monospace', letterSpacing: .5 }}>⌘K</kbd>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-            <button style={{ position: 'relative', width: 38, height: 38, borderRadius: 11, border: 'none', background: '#f8f9fc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Bell size={17} color="#6b7280" />
-              <span style={{ position: 'absolute', top: 7, right: 7, width: 17, height: 17, background: '#ef4444', borderRadius: '50%', color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>3</span>
-            </button>
-            <button style={{ width: 38, height: 38, borderRadius: 11, border: 'none', background: '#f8f9fc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Moon size={17} color="#6b7280" />
+
+            {/* Notifications */}
+            <div ref={notifsRef} style={{ position: 'relative' }}>
+              <button
+                onClick={openNotifs}
+                style={{
+                  position: 'relative', width: 38, height: 38, borderRadius: 11,
+                  border: 'none', background: showNotifs ? '#eef2ff' : t.iconBtn,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background .15s',
+                }}>
+                <Bell size={17} color={showNotifs ? '#6c63ff' : t.iconColor} />
+                {alerts.length > 0 || !loadingAlerts ? (
+                  <span style={{ position: 'absolute', top: 7, right: 7, width: 17, height: 17, background: '#ef4444', borderRadius: '50%', color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${t.headerBg}` }}>
+                    {Math.min(alerts.length, 9)}
+                  </span>
+                ) : null}
+              </button>
+
+              {/* Notifications dropdown */}
+              {showNotifs && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+                  width: 340, background: t.dropBg, borderRadius: 18,
+                  border: `1px solid ${t.dropBorder}`,
+                  boxShadow: '0 12px 40px rgba(0,0,0,.15)', zIndex: 100, overflow: 'hidden',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', borderBottom: `1px solid ${t.dropBorder}` }}>
+                    <div>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: t.dropText, margin: 0 }}>Notifications</p>
+                      <p style={{ fontSize: 11.5, color: t.dropSub, margin: '2px 0 0' }}>{alerts.length} price alert{alerts.length !== 1 ? 's' : ''}</p>
+                    </div>
+                    <button onClick={() => setShowNotifs(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+                      <X size={16} color={t.dropSub} />
+                    </button>
+                  </div>
+
+                  <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+                    {loadingAlerts ? (
+                      <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+                        <div style={{ width: 22, height: 22, border: '2.5px solid #eef0f6', borderTopColor: '#6c63ff', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+                      </div>
+                    ) : alerts.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                        <div style={{ width: 48, height: 48, borderRadius: '50%', background: isDark ? '#252848' : '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                          <Bell size={20} color={t.dropSub} />
+                        </div>
+                        <p style={{ fontSize: 13.5, fontWeight: 600, color: t.dropSub, margin: 0 }}>All caught up!</p>
+                        <p style={{ fontSize: 12, color: t.dropSub, margin: '4px 0 0', opacity: .7 }}>No price alerts yet</p>
+                      </div>
+                    ) : (
+                      alerts.slice(0, 6).map((alert, i) => {
+                        const saved = Math.max(0, parseFloat(alert.target_price) - parseFloat(alert.triggered_price));
+                        return (
+                          <div key={alert.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderBottom: i < Math.min(alerts.length, 6) - 1 ? `1px solid ${t.dropBorder}` : 'none', cursor: 'pointer', transition: 'background .1s' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = isDark ? 'rgba(255,255,255,.04)' : '#fafbfc')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                            <div style={{ width: 38, height: 38, borderRadius: 11, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <TrendingDown size={16} color="#10b981" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ fontSize: 12.5, fontWeight: 600, color: t.dropText, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {alert.title ?? alert.asin}
+                              </p>
+                              <p style={{ fontSize: 11, color: t.dropSub, margin: '2px 0 0' }}>
+                                Saved ₹{saved.toLocaleString('en-IN')} · {new Date(alert.sent_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                              </p>
+                            </div>
+                            <a href={alert.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ display: 'flex', color: '#6c63ff' }}>
+                              <ExternalLink size={13} />
+                            </a>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {alerts.length > 0 && (
+                    <div style={{ padding: '12px 18px', borderTop: `1px solid ${t.dropBorder}` }}>
+                      <button onClick={() => { navigate('/alerts'); setShowNotifs(false); }}
+                        style={{ width: '100%', padding: '9px', borderRadius: 11, border: `1.5px solid ${t.dropBorder}`, background: 'transparent', color: '#6c63ff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                        View all alerts
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Dark mode toggle */}
+            <button
+              onClick={toggleDark}
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              style={{
+                width: 38, height: 38, borderRadius: 11, border: 'none',
+                background: isDark ? '#252848' : t.iconBtn,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background .2s',
+              }}>
+              {isDark
+                ? <Sun size={17} color="#fbbf24" />
+                : <Moon size={17} color={t.iconColor} />
+              }
             </button>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, paddingLeft: 14, marginLeft: 6, borderLeft: '1.5px solid #eef0f6' }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: '50%',
-                background: 'linear-gradient(135deg,#6c63ff,#a78bfa)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 13, fontWeight: 800, flexShrink: 0,
-                boxShadow: '0 2px 8px rgba(108,99,255,.35)',
-              }}>{initials}</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#1f2937', lineHeight: 1 }}>{displayName}</div>
-                <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 3, fontWeight: 600 }}>Free Plan</div>
-              </div>
-              <ChevronDown size={14} color="#9ca3af" />
+            {/* Profile */}
+            <div ref={profileRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowProfile(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 9,
+                  paddingLeft: 14, marginLeft: 6, borderLeft: `1.5px solid ${t.divider}`,
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  borderRadius: 11, padding: '5px 8px 5px 14px',
+                  transition: 'background .15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = isDark ? 'rgba(255,255,255,.06)' : '#f8f9fc')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+                  background: 'linear-gradient(135deg,#6c63ff,#a78bfa)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 13, fontWeight: 800,
+                  boxShadow: '0 2px 8px rgba(108,99,255,.35)',
+                }}>{initials}</div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: t.nameColor, lineHeight: 1 }}>{displayName}</div>
+                  <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 3, fontWeight: 600 }}>Free Plan</div>
+                </div>
+                <ChevronDown size={14} color={t.iconColor} style={{ transition: 'transform .2s', transform: showProfile ? 'rotate(180deg)' : 'none' }} />
+              </button>
+
+              {/* Profile dropdown */}
+              {showProfile && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+                  width: 220, background: t.dropBg, borderRadius: 16,
+                  border: `1px solid ${t.dropBorder}`,
+                  boxShadow: '0 12px 40px rgba(0,0,0,.15)', zIndex: 100, overflow: 'hidden',
+                  padding: '6px',
+                }}>
+                  {/* User info header */}
+                  <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${t.dropBorder}`, marginBottom: 4 }}>
+                    <p style={{ fontSize: 13.5, fontWeight: 700, color: t.dropText, margin: 0 }}>{displayName}</p>
+                    <p style={{ fontSize: 11.5, color: t.dropSub, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</p>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 10.5, background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: 20, fontWeight: 700 }}>
+                      👑 Free Plan
+                    </span>
+                  </div>
+
+                  {[
+                    { icon: User,     label: 'My Profile',   path: '/settings' },
+                    { icon: Settings, label: 'Settings',     path: '/settings' },
+                    { icon: CreditCard, label: 'Billing',    path: '/billing'  },
+                    { icon: HelpCircle, label: 'Help & Support', path: '/support' },
+                  ].map(({ icon: Icon, label, path }) => (
+                    <button key={label}
+                      onClick={() => { navigate(path); setShowProfile(false); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                        padding: '9px 12px', borderRadius: 10, border: 'none',
+                        background: 'transparent', color: t.dropText,
+                        fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+                        transition: 'background .1s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = isDark ? 'rgba(255,255,255,.07)' : '#f3f4f6')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <Icon size={15} color={t.dropSub} />
+                      {label}
+                    </button>
+                  ))}
+
+                  <div style={{ borderTop: `1px solid ${t.dropBorder}`, marginTop: 4, paddingTop: 4 }}>
+                    <button onClick={handleLogout}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                        padding: '9px 12px', borderRadius: 10, border: 'none',
+                        background: 'transparent', color: '#ef4444',
+                        fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                        transition: 'background .1s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <LogOut size={15} color="#ef4444" />
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main style={{ flex: 1, overflowY: 'auto', padding: 28, background: '#f0f2f8' }}>
+        <main style={{ flex: 1, overflowY: 'auto', padding: 28, background: t.mainBg, transition: 'background .2s' }}>
           {children}
         </main>
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

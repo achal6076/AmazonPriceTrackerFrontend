@@ -7,6 +7,8 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import Alerts from './pages/Alerts';
+import History from './pages/History';
+import Categories from './pages/Categories';
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -35,8 +37,8 @@ export default function App() {
                 <Route path="/dashboard"    element={<Dashboard />} />
                 <Route path="/products"     element={<Products />} />
                 <Route path="/alerts"       element={<Alerts />} />
-                <Route path="/history"      element={<Placeholder title="Price History" />} />
-                <Route path="/categories"   element={<Placeholder title="Watched Categories" />} />
+                <Route path="/history"      element={<History />} />
+                <Route path="/categories"   element={<Categories />} />
                 <Route path="/deals"        element={<Placeholder title="Top Deals" />} />
                 <Route path="/reports"      element={<Placeholder title="Reports" />} />
                 <Route path="/integrations" element={<Placeholder title="Integrations" />} />

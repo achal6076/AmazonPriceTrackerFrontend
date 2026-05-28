@@ -13,6 +13,7 @@ import {
   MoreHorizontal, ShoppingBag,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import toast from 'react-hot-toast';
 
 interface TrackedItem {
@@ -86,6 +87,8 @@ function ProductThumb({ src, size = 40 }: { src: string | null; size?: number })
 export default function Dashboard() {
   const navigate  = useNavigate();
   const { user }  = useAuthStore();
+  const { isMobile, isTablet } = useBreakpoint();
+  const isSmall = isMobile || isTablet;           // stack single-column
   const [tracked, setTracked] = useState<TrackedItem[]>([]);
   const [alerts,  setAlerts]  = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,55 +136,46 @@ export default function Dashboard() {
 
       {/* ── Welcome Banner ── */}
       <div style={{
-        borderRadius: 22, overflow: 'hidden', position: 'relative',
+        borderRadius: 20, overflow: 'hidden', position: 'relative',
         background: 'linear-gradient(135deg, #13152e 0%, #1e2248 60%, #252868 100%)',
-        padding: '28px 32px',
+        padding: isMobile ? '22px 20px' : '28px 32px',
         boxShadow: '0 8px 32px rgba(108,99,255,.2)',
       }}>
-        {/* Decorative blobs */}
-        <div style={{ position: 'absolute', top: -40, right: 120, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(108,99,255,.25) 0%, transparent 70%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', bottom: -20, right: -20, width: 140, height: 140, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', top: -40, right: 80, width: 180, height: 180, borderRadius: '50%', background: 'radial-gradient(circle, rgba(108,99,255,.25) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -20, right: -20, width: 120, height: 120, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', gap: isMobile ? 16 : 0, position: 'relative' }}>
           <div>
-            <p style={{ fontSize: 13, color: '#a78bfa', fontWeight: 600, margin: '0 0 6px', letterSpacing: '.5px' }}>
+            <p style={{ fontSize: 12.5, color: '#a78bfa', fontWeight: 600, margin: '0 0 6px', letterSpacing: '.5px' }}>
               {greeting}, {displayName} 👋
             </p>
-            <h1 style={{ fontSize: 28, fontWeight: 900, color: '#fff', margin: 0, letterSpacing: '-.5px', lineHeight: 1.2 }}>
-              {tracked.length === 0
-                ? 'Start tracking your first product'
-                : `You're tracking ${tracked.length} product${tracked.length !== 1 ? 's' : ''}`
-              }
+            <h1 style={{ fontSize: isMobile ? 20 : 28, fontWeight: 900, color: '#fff', margin: 0, letterSpacing: '-.5px', lineHeight: 1.2 }}>
+              {tracked.length === 0 ? 'Start tracking your first product' : `You're tracking ${tracked.length} product${tracked.length !== 1 ? 's' : ''}`}
             </h1>
-            <p style={{ fontSize: 13.5, color: '#6b7280', marginTop: 8, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 13, color: '#6b7280', marginTop: 7, lineHeight: 1.6 }}>
               {tracked.length === 0
-                ? 'Paste any Amazon product URL to monitor price changes and get instant alerts.'
-                : `${alerts.length} price alert${alerts.length !== 1 ? 's' : ''} triggered · ₹${totalSaved.toLocaleString('en-IN')} saved total`
-              }
+                ? 'Paste any Amazon product URL to monitor price changes.'
+                : `${alerts.length} alert${alerts.length !== 1 ? 's' : ''} triggered · ₹${totalSaved.toLocaleString('en-IN')} saved`}
             </p>
           </div>
-
           <button onClick={() => navigate('/products')} style={{
-            display: 'flex', alignItems: 'center', gap: 9,
-            padding: '13px 24px', borderRadius: 14, border: 'none',
+            display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
+            padding: isMobile ? '11px 20px' : '13px 24px', borderRadius: 14, border: 'none',
             background: 'linear-gradient(135deg,#6c63ff,#a78bfa)',
             color: '#fff', fontWeight: 700, fontSize: 14,
             cursor: 'pointer', flexShrink: 0,
-            boxShadow: '0 6px 20px rgba(108,99,255,.5)',
-            transition: 'transform .15s',
-          }}
-            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.04)')}
-            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
-            <Plus size={16} />
+            boxShadow: '0 6px 20px rgba(108,99,255,.5)', alignSelf: isMobile ? 'flex-start' : 'center',
+          }}>
+            <Plus size={15} />
             {tracked.length === 0 ? 'Add Product' : 'Track More'}
           </button>
         </div>
       </div>
 
       {/* ── Stat Cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? 12 : 16 }}>
         {statCards.map(({ label, value, icon: Icon, gradient, glow, trendLabel }) => (
-          <div key={label} style={{ ...card, padding: '22px 22px 20px', position: 'relative', overflow: 'hidden' }}>
+          <div key={label} style={{ ...card, padding: isMobile ? '16px 16px 14px' : '22px 22px 20px', position: 'relative', overflow: 'hidden' }}>
             {/* Subtle gradient corner blob */}
             <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, borderRadius: '50%', background: glow, pointerEvents: 'none' }} />
 
@@ -207,10 +201,10 @@ export default function Dashboard() {
       </div>
 
       {/* ── Middle Row: Chart + Recent Drops ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isSmall ? '1fr' : '1fr 300px', gap: 18 }}>
 
         {/* Price History */}
-        <div style={{ ...card, padding: '24px 24px 20px' }}>
+        <div style={{ ...card, padding: isMobile ? '18px 16px 16px' : '24px 24px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
             <div>
               <h2 style={{ fontSize: 17, fontWeight: 800, color: '#0f1117', margin: 0 }}>Price History</h2>
@@ -318,7 +312,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Bottom Row: Products Table + Alert Summary ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isSmall ? '1fr' : '1fr 300px', gap: 18 }}>
 
         {/* Tracked Products */}
         <div style={{ ...card, overflow: 'hidden' }}>
@@ -355,7 +349,38 @@ export default function Dashboard() {
                 <Plus size={15} /> Track your first product
               </button>
             </div>
+          ) : isSmall ? (
+            /* ── Mobile / Tablet card list ── */
+            <div>
+              {tracked.slice(0, 5).map((item, idx) => {
+                const current = item.current_price ? parseFloat(item.current_price) : null;
+                const target  = item.target_price  ? parseFloat(item.target_price)  : null;
+                const hit     = current !== null && target !== null && current <= target;
+                return (
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderBottom: idx < Math.min(tracked.length, 5) - 1 ? '1px solid #f9fafb' : 'none' }}>
+                    <ProductThumb src={item.image_url} size={44} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title ?? item.asin}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 800, color: hit ? '#10b981' : '#374151' }}>
+                          {current ? `₹${current.toLocaleString('en-IN')}` : '—'}
+                        </span>
+                        {target && <span style={{ fontSize: 11, color: '#9ca3af' }}>Target: ₹{target.toLocaleString('en-IN')}</span>}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: item.is_active ? '#ecfdf5' : '#f3f4f6', color: item.is_active ? '#059669' : '#9ca3af' }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: item.is_active ? '#10b981' : '#d1d5db' }} />
+                          {item.is_active ? 'Active' : 'Paused'}
+                        </span>
+                      </div>
+                    </div>
+                    <a href={item.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', padding: 8, borderRadius: 10, background: '#f3f4f6', color: '#9ca3af', flexShrink: 0 }}>
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
+            /* ── Desktop table ── */
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#fafbfc' }}>
@@ -383,12 +408,10 @@ export default function Dashboard() {
                         </div>
                       </td>
                       <td style={{ padding: '13px 18px', textAlign: 'center' }}>
-                        <div>
-                          <span style={{ fontSize: 14, fontWeight: 800, color: hit ? '#10b981' : '#111827' }}>
-                            {current ? `₹${current.toLocaleString('en-IN')}` : '—'}
-                          </span>
-                          {hit && <div style={{ fontSize: 10, background: '#dcfce7', color: '#16a34a', padding: '2px 7px', borderRadius: 20, fontWeight: 800, display: 'inline-block', marginLeft: 6 }}>Hit!</div>}
-                        </div>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: hit ? '#10b981' : '#111827' }}>
+                          {current ? `₹${current.toLocaleString('en-IN')}` : '—'}
+                        </span>
+                        {hit && <span style={{ fontSize: 10, background: '#dcfce7', color: '#16a34a', padding: '2px 7px', borderRadius: 20, fontWeight: 800, marginLeft: 6 }}>Hit!</span>}
                       </td>
                       <td style={{ padding: '13px 18px', textAlign: 'center', fontSize: 13, color: '#374151', fontWeight: 500 }}>
                         {target ? `₹${target.toLocaleString('en-IN')}` : <span style={{ color: '#c4c9d4' }}>—</span>}
@@ -397,18 +420,13 @@ export default function Dashboard() {
                         <MiniSpark data={hit ? SPARKLINE_DOWN : SPARKLINE_UP} color={hit ? '#34d399' : '#6c63ff'} />
                       </td>
                       <td style={{ padding: '13px 18px', textAlign: 'center' }}>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontSize: 11.5, fontWeight: 700, padding: '5px 12px', borderRadius: 20,
-                          background: item.is_active ? '#ecfdf5' : '#f3f4f6',
-                          color: item.is_active ? '#059669' : '#9ca3af',
-                        }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, padding: '5px 12px', borderRadius: 20, background: item.is_active ? '#ecfdf5' : '#f3f4f6', color: item.is_active ? '#059669' : '#9ca3af' }}>
                           <span style={{ width: 5, height: 5, borderRadius: '50%', background: item.is_active ? '#10b981' : '#d1d5db' }} />
                           {item.is_active ? 'Active' : 'Paused'}
                         </span>
                       </td>
                       <td style={{ padding: '13px 14px', textAlign: 'center' }}>
-                        <a href={item.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', padding: 6, borderRadius: 8, background: '#f3f4f6', color: '#9ca3af', transition: 'all .15s' }}>
+                        <a href={item.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', padding: 6, borderRadius: 8, background: '#f3f4f6', color: '#9ca3af' }}>
                           <ExternalLink size={13} />
                         </a>
                       </td>

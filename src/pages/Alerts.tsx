@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getAlerts } from '../api/tracking';
 import { Bell, TrendingDown, ExternalLink, Package, ChevronRight, BadgeCheck } from 'lucide-react';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import toast from 'react-hot-toast';
 
 interface Alert {
@@ -14,6 +15,8 @@ const card: React.CSSProperties = {
 };
 
 export default function Alerts() {
+  const { isMobile, isTablet } = useBreakpoint();
+  const isSmall = isMobile || isTablet;
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,7 +46,7 @@ export default function Alerts() {
       </div>
 
       {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: 14 }}>
         {[
           { label: 'Total Alerts Sent', value: alerts.length, icon: Bell, iconColor: '#818cf8', iconBg: '#eef2ff', sub: 'All time' },
           { label: 'Total Saved', value: `₹${totalSaved.toLocaleString('en-IN')}`, icon: BadgeCheck, iconColor: '#34d399', iconBg: '#ecfdf5', sub: 'Across all alerts' },
@@ -94,60 +97,53 @@ export default function Alerts() {
 
               return (
                 <div key={alert.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 16,
-                  padding: '16px 24px',
+                  display: 'flex', flexDirection: isSmall ? 'column' : 'row',
+                  alignItems: isSmall ? 'flex-start' : 'center', gap: isSmall ? 12 : 16,
+                  padding: isSmall ? '16px 18px' : '16px 24px',
                   borderBottom: idx < alerts.length - 1 ? '1px solid #f9fafb' : 'none',
-                  transition: 'background .15s',
                 }}>
-                  {/* Icon */}
-                  <div style={{ width: 46, height: 46, borderRadius: 14, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Bell size={20} color="#10b981" />
-                  </div>
-
-                  {/* Product info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13.5, fontWeight: 700, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {alert.title ?? alert.asin}
-                    </p>
-                    <p style={{ fontSize: 11.5, color: '#9ca3af', margin: '3px 0 0' }}>
-                      {date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} &nbsp;·&nbsp;
-                      {date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-
-                  {/* Prices */}
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                      <span style={{ fontSize: 18, fontWeight: 800, color: '#111827' }}>
-                        ₹{actualP.toLocaleString('en-IN')}
-                      </span>
-                      <span style={{ fontSize: 11, background: '#dcfce7', color: '#16a34a', padding: '3px 9px', borderRadius: 20, fontWeight: 800 }}>
-                        -{pct}%
-                      </span>
+                  {/* Top row on mobile */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 13, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Bell size={18} color="#10b981" />
                     </div>
-                    <p style={{ fontSize: 11.5, color: '#9ca3af', margin: '3px 0 0' }}>
-                      Target was ₹{targetP.toLocaleString('en-IN')}
-                    </p>
-                  </div>
-
-                  {/* Saved badge */}
-                  <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 90 }}>
-                    <div style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 12, padding: '7px 14px' }}>
-                      <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>You saved</p>
-                      <p style={{ fontSize: 15, fontWeight: 800, color: '#16a34a', margin: '2px 0 0' }}>₹{saved.toLocaleString('en-IN')}</p>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13.5, fontWeight: 700, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {alert.title ?? alert.asin}
+                      </p>
+                      <p style={{ fontSize: 11.5, color: '#9ca3af', margin: '3px 0 0' }}>
+                        {date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {!isMobile && <> &nbsp;·&nbsp; {date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</>}
+                      </p>
                     </div>
+                    {/* Buy Now on mobile inline */}
+                    {isSmall && (
+                      <a href={alert.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10, textDecoration: 'none', background: 'linear-gradient(135deg,#6c63ff,#a78bfa)', color: '#fff', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                        <ExternalLink size={11} /> Buy
+                      </a>
+                    )}
                   </div>
 
-                  {/* Actions */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <a href={alert.url} target="_blank" rel="noreferrer" style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '8px 16px', borderRadius: 10, textDecoration: 'none',
-                      background: 'linear-gradient(135deg,#6c63ff,#a78bfa)', color: '#fff',
-                      fontSize: 12.5, fontWeight: 700, boxShadow: '0 3px 10px rgba(108,99,255,.3)',
-                    }}>
-                      <ExternalLink size={12} /> Buy Now
-                    </a>
+                  {/* Price info row on mobile */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: isSmall ? 10 : 16, width: isSmall ? '100%' : 'auto', flexWrap: 'wrap' as const }}>
+                    <div style={{ flex: isSmall ? 1 : 'none', textAlign: isSmall ? 'left' : 'right', minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: isSmall ? 16 : 18, fontWeight: 800, color: '#111827' }}>₹{actualP.toLocaleString('en-IN')}</span>
+                        <span style={{ fontSize: 11, background: '#dcfce7', color: '#16a34a', padding: '3px 9px', borderRadius: 20, fontWeight: 800 }}>-{pct}%</span>
+                      </div>
+                      <p style={{ fontSize: 11.5, color: '#9ca3af', margin: '3px 0 0' }}>Target ₹{targetP.toLocaleString('en-IN')}</p>
+                    </div>
+
+                    <div style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 12, padding: '6px 12px', textAlign: 'center', flexShrink: 0 }}>
+                      <p style={{ fontSize: 10.5, color: '#9ca3af', margin: 0 }}>You saved</p>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: '#16a34a', margin: '1px 0 0' }}>₹{saved.toLocaleString('en-IN')}</p>
+                    </div>
+
+                    {!isSmall && (
+                      <a href={alert.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, textDecoration: 'none', background: 'linear-gradient(135deg,#6c63ff,#a78bfa)', color: '#fff', fontSize: 12.5, fontWeight: 700, boxShadow: '0 3px 10px rgba(108,99,255,.3)', flexShrink: 0 }}>
+                        <ExternalLink size={12} /> Buy Now
+                      </a>
+                    )}
                   </div>
                 </div>
               );

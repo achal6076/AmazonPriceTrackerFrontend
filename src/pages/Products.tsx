@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { getProducts, previewScrape, addProduct } from '../api/products';
 import { startTracking } from '../api/tracking';
 import { Search, Plus, ExternalLink, Loader2, Bell, X, Link2, Package, AlertCircle } from 'lucide-react';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import toast from 'react-hot-toast';
 
 interface Product {
@@ -39,6 +40,8 @@ function ProductImage({ src, size = 42 }: { src: string | null; size?: number })
 }
 
 export default function Products() {
+  const { isMobile, isTablet } = useBreakpoint();
+  const isSmall = isMobile || isTablet;
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts]   = useState<Product[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -144,19 +147,19 @@ export default function Products() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 9, background: '#f8f9fc', border: '1.5px solid #eef0f6', borderRadius: 12, padding: '10px 16px' }}>
-            <Link2 size={14} color="#9ca3af" />
+            <Link2 size={14} color="#9ca3af" style={{ flexShrink: 0 }} />
             <input
               type="url" value={url}
               onChange={e => setUrl(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePreview()}
-              placeholder="https://www.amazon.in/dp/ASIN or paste full product URL"
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: '#374151' }}
+              placeholder={isMobile ? 'Paste Amazon URL…' : 'https://www.amazon.in/dp/ASIN or paste full product URL'}
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: '#374151', minWidth: 0 }}
             />
             {url && (
               <button onClick={() => { setUrl(''); setPreview(null); setPreviewError(''); }}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, display: 'flex' }}>
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', flexShrink: 0 }}>
                 <X size={13} color="#9ca3af" />
               </button>
             )}
@@ -165,7 +168,7 @@ export default function Products() {
             onClick={handlePreview}
             disabled={previewing || !url.trim()}
             style={{
-              display: 'flex', alignItems: 'center', gap: 8,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               padding: '10px 22px', borderRadius: 12, border: 'none',
               background: previewing || !url.trim() ? '#e5e7eb' : 'linear-gradient(135deg,#6c63ff,#a78bfa)',
               color: previewing || !url.trim() ? '#9ca3af' : '#fff',
@@ -279,7 +282,49 @@ export default function Products() {
               {localSearch ? 'Try a different search term' : 'Paste an Amazon URL above to get started'}
             </p>
           </div>
+        ) : isSmall ? (
+          /* ── Mobile / Tablet card list ── */
+          <div>
+            {filtered.map((p, idx) => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '14px 18px', borderBottom: idx < filtered.length - 1 ? '1px solid #f9fafb' : 'none' }}>
+                <ProductImage src={p.image_url} size={46} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13.5, fontWeight: 700, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.title ?? p.asin}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                    {p.current_price
+                      ? <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>₹{Number(p.current_price).toLocaleString('en-IN')}</span>
+                      : <span style={{ fontSize: 11.5, color: '#c4c9d4' }}>Not scraped yet</span>
+                    }
+                    <span style={{ fontSize: 10.5, background: '#eff6ff', color: '#3b82f6', padding: '2px 8px', borderRadius: 20, fontWeight: 600, textTransform: 'capitalize' as const }}>{p.retailer}</span>
+                  </div>
+                  <a href={p.url} target="_blank" rel="noreferrer"
+                    style={{ fontSize: 11, color: '#6c63ff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 3 }}>
+                    <ExternalLink size={9} /> View on Amazon
+                  </a>
+                </div>
+                <button
+                  onClick={() => handleTrack(p.id)}
+                  disabled={trackingId === p.id}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                    padding: '8px 14px', borderRadius: 10, border: 'none',
+                    background: trackingId === p.id ? '#f3f4f6' : '#eef2ff',
+                    color: trackingId === p.id ? '#9ca3af' : '#6c63ff',
+                    fontSize: 12, fontWeight: 700, cursor: trackingId === p.id ? 'not-allowed' : 'pointer',
+                  }}>
+                  {trackingId === p.id
+                    ? <Loader2 size={12} style={{ animation: 'spin .7s linear infinite' }} />
+                    : <Bell size={12} />
+                  }
+                  {!isMobile && (trackingId === p.id ? 'Tracking…' : 'Track')}
+                </button>
+              </div>
+            ))}
+          </div>
         ) : (
+          /* ── Desktop table ── */
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#fafbfc' }}>
@@ -311,34 +356,18 @@ export default function Products() {
                   <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                     {p.current_price
                       ? <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>₹{Number(p.current_price).toLocaleString('en-IN')}</span>
-                      : (
-                        <span style={{ fontSize: 11.5, color: '#c4c9d4', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e5e7eb' }} />
-                          Not scraped yet
-                        </span>
-                      )
+                      : <span style={{ fontSize: 11.5, color: '#c4c9d4', display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e5e7eb' }} />Not scraped yet</span>
                     }
                   </td>
                   <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                    <span style={{ fontSize: 11.5, background: '#eff6ff', color: '#3b82f6', padding: '4px 11px', borderRadius: 20, fontWeight: 600, textTransform: 'capitalize' }}>{p.retailer}</span>
+                    <span style={{ fontSize: 11.5, background: '#eff6ff', color: '#3b82f6', padding: '4px 11px', borderRadius: 20, fontWeight: 600, textTransform: 'capitalize' as const }}>{p.retailer}</span>
                   </td>
                   <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => handleTrack(p.id)}
-                      disabled={trackingId === p.id}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '8px 18px', borderRadius: 10, border: 'none',
-                        background: trackingId === p.id ? '#f3f4f6' : '#eef2ff',
-                        color: trackingId === p.id ? '#9ca3af' : '#6c63ff',
-                        fontSize: 12.5, fontWeight: 700,
-                        cursor: trackingId === p.id ? 'not-allowed' : 'pointer',
-                        transition: 'all .15s',
-                      }}>
+                    <button onClick={() => handleTrack(p.id)} disabled={trackingId === p.id}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 10, border: 'none', background: trackingId === p.id ? '#f3f4f6' : '#eef2ff', color: trackingId === p.id ? '#9ca3af' : '#6c63ff', fontSize: 12.5, fontWeight: 700, cursor: trackingId === p.id ? 'not-allowed' : 'pointer' }}>
                       {trackingId === p.id
                         ? <><Loader2 size={12} style={{ animation: 'spin .7s linear infinite' }} /> Tracking…</>
-                        : <><Bell size={12} /> Track</>
-                      }
+                        : <><Bell size={12} /> Track</>}
                     </button>
                   </td>
                 </tr>

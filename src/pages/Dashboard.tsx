@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { getTracking, getAlerts } from '../api/tracking';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Sparkline,
+  ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import {
   Target, Bell, TrendingDown, Wallet,

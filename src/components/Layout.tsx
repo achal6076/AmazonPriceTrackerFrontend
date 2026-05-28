@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import {
   LayoutDashboard, Package, Bell, History, Tag,
   Zap, BarChart2, Plug, Settings, CreditCard,
@@ -36,6 +37,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const displayName = user?.email?.split('@')[0] ?? 'User';
   const initials = displayName[0]?.toUpperCase() ?? 'U';
+  const [searchVal, setSearchVal] = useState('');
+
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchVal.trim()) {
+      navigate(`/products?q=${encodeURIComponent(searchVal.trim())}`);
+      setSearchVal('');
+    }
+  };
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8' }}>
@@ -133,9 +142,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             borderRadius: 12, padding: '9px 16px', flex: 1, maxWidth: 500,
           }}>
             <Search size={14} color="#9ca3af" />
-            <input type="text"
+            <input
+              type="text"
+              value={searchVal}
+              onChange={e => setSearchVal(e.target.value)}
+              onKeyDown={handleSearch}
               placeholder="Search any product or paste Amazon link..."
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: '#374151' }} />
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: '#374151' }}
+            />
             <kbd style={{ fontSize: 10.5, color: '#9ca3af', background: '#e9ecf0', padding: '2px 7px', borderRadius: 5, fontFamily: 'monospace', letterSpacing: .5 }}>⌘K</kbd>
           </div>
 

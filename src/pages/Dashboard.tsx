@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { getTracking, getAlerts } from '../api/tracking';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell
+  ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import { Target, Bell, TrendingDown, Wallet, MoreHorizontal, ArrowUpRight, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -27,36 +27,45 @@ const MOCK_HISTORY = [
   { date: 'Jun 1', price: 19990 },
 ];
 
+const PIE_DATA = [
+  { name: 'Active',    value: 6, color: '#34d399' },
+  { name: 'Triggered', value: 3, color: '#fbbf24' },
+  { name: 'Expired',   value: 1, color: '#f87171' },
+  { name: 'Paused',    value: 1, color: '#d1d5db' },
+];
+const PIE_TOTAL = PIE_DATA.reduce((a, b) => a + b.value, 0);
+
 const STAT_CARDS = [
-  { label: 'Tracked Products', icon: Target, color: '#818cf8', bg: '#eef2ff', key: 'tracked' },
-  { label: 'Total Price Alerts', icon: Bell, color: '#34d399', bg: '#ecfdf5', key: 'alerts' },
-  { label: 'Price Drops', icon: TrendingDown, color: '#fbbf24', bg: '#fffbeb', key: 'drops' },
-  { label: 'Total Saved', icon: Wallet, color: '#60a5fa', bg: '#eff6ff', key: 'saved' },
+  { label: 'Tracked Products',  icon: Target,      iconColor: '#818cf8', iconBg: '#eef2ff', key: 'tracked' },
+  { label: 'Total Price Alerts', icon: Bell,        iconColor: '#34d399', iconBg: '#ecfdf5', key: 'alerts'  },
+  { label: 'Price Drops',       icon: TrendingDown, iconColor: '#fbbf24', iconBg: '#fffbeb', key: 'drops'   },
+  { label: 'Total Saved',       icon: Wallet,       iconColor: '#60a5fa', iconBg: '#eff6ff', key: 'saved'   },
 ];
 
-const PIE_DATA = [
-  { name: 'Active', value: 6, color: '#34d399' },
-  { name: 'Triggered', value: 3, color: '#fbbf24' },
-  { name: 'Expired', value: 1, color: '#f87171' },
-  { name: 'Paused', value: 1, color: '#d1d5db' },
-];
+const TIME_FILTERS = ['1M', '3M', '6M', '1Y', 'All'];
+
+const card: React.CSSProperties = {
+  background: '#fff',
+  borderRadius: 16,
+  border: '1px solid #f1f3f9',
+  boxShadow: '0 1px 4px rgba(0,0,0,.06)',
+};
 
 const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload?.length) {
-    return (
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 px-3 py-2">
-        <p className="text-xs text-gray-500 mb-1">{label}</p>
-        <p className="text-sm font-bold text-gray-900">₹{payload[0].value.toLocaleString('en-IN')}</p>
-      </div>
-    );
-  }
-  return null;
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background:'#fff', borderRadius:12, padding:'8px 12px', boxShadow:'0 4px 16px rgba(0,0,0,.12)', border:'1px solid #f0f0f0' }}>
+      <p style={{ fontSize:11, color:'#9ca3af', marginBottom:2 }}>{label}</p>
+      <p style={{ fontSize:13, fontWeight:700, color:'#1f2937' }}>₹{payload[0].value.toLocaleString('en-IN')}</p>
+    </div>
+  );
 };
 
 export default function Dashboard() {
-  const [tracked, setTracked] = useState<TrackedItem[]>([]);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tracked, setTracked]   = useState<TrackedItem[]>([]);
+  const [alerts, setAlerts]     = useState<AlertItem[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [activeFilter, setActiveFilter] = useState('3M');
 
   useEffect(() => {
     Promise.all([getTracking(), getAlerts()])
@@ -65,39 +74,41 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  const dropsCount = alerts.length;
   const totalSaved = alerts.reduce((acc, a) =>
-    acc + (parseFloat(a.target_price) - parseFloat(a.triggered_price)), 0);
+    acc + Math.max(0, parseFloat(a.target_price) - parseFloat(a.triggered_price)), 0);
 
-  const stats = {
+  const statValues: Record<string, string | number> = {
     tracked: tracked.length,
-    alerts: alerts.length,
-    drops: dropsCount,
-    saved: `₹${Math.max(0, totalSaved).toLocaleString('en-IN')}`,
+    alerts:  alerts.length,
+    drops:   alerts.length,
+    saved:   `₹${totalSaved.toLocaleString('en-IN')}`,
   };
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Page title */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Track, analyze and save on Amazon</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: 0 }}>Dashboard</h1>
+        <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 3 }}>Track, analyze and save on Amazon</p>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-4">
-        {STAT_CARDS.map(({ label, icon: Icon, color, bg, key }) => (
-          <div key={key} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <div className="flex items-start gap-3">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
-                <Icon size={20} style={{ color }} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+        {STAT_CARDS.map(({ label, icon: Icon, iconColor, iconBg, key }) => (
+          <div key={key} style={{ ...card, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 12, background: iconBg, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon size={20} color={iconColor} />
               </div>
               <div>
-                <p className="text-xs text-gray-500 font-medium">{label}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-0.5 leading-none">
-                  {(stats as any)[key]}
+                <p style={{ fontSize: 11.5, color: '#9ca3af', fontWeight: 500, margin: 0 }}>{label}</p>
+                <p style={{ fontSize: 26, fontWeight: 800, color: '#111827', lineHeight: 1.1, margin: '4px 0 0' }}>
+                  {statValues[key]}
                 </p>
-                <p className="text-xs mt-1.5 font-medium" style={{ color: '#34d399' }}>
+                <p style={{ fontSize: 11, color: '#34d399', fontWeight: 600, marginTop: 6 }}>
                   +{key === 'saved' ? '₹2,000' : '2'} this week
                 </p>
               </div>
@@ -106,191 +117,206 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Middle row */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* Price History Chart */}
-        <div className="col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="font-bold text-gray-900">Price History</h2>
-            <div className="flex items-center gap-1">
-              {['1M','3M','6M','1Y','All'].map((t) => (
-                <button key={t}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
-                    t === '3M' ? 'text-white' : 'text-gray-500 hover:bg-gray-100'
-                  }`}
-                  style={t === '3M' ? { background: '#6c63ff' } : {}}
-                >{t}</button>
+      {/* Middle row: Price History + Recent Price Drops */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
+
+        {/* Price History */}
+        <div style={{ ...card, padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Price History</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {TIME_FILTERS.map((f) => (
+                <button key={f} onClick={() => setActiveFilter(f)} style={{
+                  padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  border: 'none', cursor: 'pointer', transition: 'all .15s',
+                  background: activeFilter === f ? '#6c63ff' : 'transparent',
+                  color: activeFilter === f ? '#fff' : '#9ca3af',
+                }}>{f}</button>
               ))}
-              <button className="p-1 rounded-lg hover:bg-gray-100 ml-1">
-                <MoreHorizontal size={15} className="text-gray-400" />
+              <button style={{ padding: '4px 6px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                <MoreHorizontal size={16} color="#9ca3af" />
               </button>
             </div>
           </div>
 
-          {/* Product info */}
+          {/* Product row */}
           {tracked[0] ? (
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {tracked[0].image_url && (
-                  <img src={tracked[0].image_url} className="w-10 h-10 object-contain rounded-lg bg-gray-50" alt="" />
+                  <img src={tracked[0].image_url} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, background: '#f9fafb' }} alt="" />
                 )}
                 <div>
-                  <p className="text-sm font-semibold text-gray-900 line-clamp-1 max-w-xs">
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: 0, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {tracked[0].title ?? tracked[0].asin}
                   </p>
-                  <p className="text-xs text-gray-400">{tracked[0].asin} • Electronics</p>
+                  <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>{tracked[0].asin} • Electronics</p>
                 </div>
               </div>
               {tracked[0].current_price && (
-                <div className="text-right">
-                  <p className="font-bold text-gray-900">₹{Number(tracked[0].current_price).toLocaleString('en-IN')}</p>
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">-20%</span>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: '#111827' }}>
+                    ₹{Number(tracked[0].current_price).toLocaleString('en-IN')}
+                  </span>
+                  <span style={{ marginLeft: 8, fontSize: 11, background: '#fee2e2', color: '#ef4444', padding: '2px 8px', borderRadius: 20, fontWeight: 700 }}>-20%</span>
+                  <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                    Min: ₹{Number(tracked[0].current_price).toLocaleString('en-IN')} | Max: ₹{(Number(tracked[0].current_price) * 1.25).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </p>
                 </div>
               )}
             </div>
           ) : (
-            <p className="text-xs text-gray-400 mb-4">No tracked products yet</p>
+            <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 16 }}>No tracked products yet</p>
           )}
 
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={MOCK_HISTORY} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+            <LineChart data={MOCK_HISTORY} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false}
-                tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+                tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
               <Tooltip content={<CustomTooltip />} />
               <Line type="monotone" dataKey="price" stroke="#6c63ff" strokeWidth={2.5}
                 dot={false} activeDot={{ r: 5, fill: '#6c63ff', strokeWidth: 2, stroke: '#fff' }} />
             </LineChart>
           </ResponsiveContainer>
 
-          <div className="mt-3 flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3 py-2.5">
-            <div className="w-6 h-6 bg-green-100 rounded-lg flex items-center justify-center">
-              <Target size={13} className="text-green-600" />
+          <div style={{
+            marginTop: 12, display: 'flex', alignItems: 'center', gap: 10,
+            background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '10px 14px',
+          }}>
+            <div style={{ width: 28, height: 28, background: '#dcfce7', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Target size={13} color="#16a34a" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-green-800">Lowest price ever</p>
-              <p className="text-xs text-green-600">You saved ₹5,000 (20%) by waiting!</p>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#166534', margin: 0 }}>Lowest price ever</p>
+              <p style={{ fontSize: 11, color: '#16a34a', margin: '2px 0 0' }}>You saved ₹5,000 (20%) by waiting!</p>
             </div>
           </div>
         </div>
 
         {/* Recent Price Drops */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-gray-900">Recent Price Drops</h2>
-            <Link to="/alerts" className="text-xs font-medium" style={{ color: '#6c63ff' }}>View All</Link>
+        <div style={{ ...card, padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Recent Price Drops</h2>
+            <Link to="/alerts" style={{ fontSize: 12, fontWeight: 600, color: '#6c63ff', textDecoration: 'none' }}>View All</Link>
           </div>
 
           {alerts.length === 0 ? (
-            <div className="text-center py-8">
-              <TrendingDown size={32} className="mx-auto text-gray-200 mb-2" />
-              <p className="text-xs text-gray-400">No price drops yet</p>
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <TrendingDown size={32} color="#e5e7eb" style={{ margin: '0 auto 8px' }} />
+              <p style={{ fontSize: 12, color: '#9ca3af' }}>No price drops yet</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {alerts.slice(0, 5).map((a) => (
-                <div key={a.id} className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-100 rounded-xl flex-shrink-0 flex items-center justify-center">
-                    <Target size={14} className="text-gray-400" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {alerts.slice(0, 5).map((a) => {
+                const pct = Math.round(((parseFloat(a.target_price) - parseFloat(a.triggered_price)) / parseFloat(a.target_price)) * 100);
+                return (
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 38, height: 38, background: '#f3f4f6', borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Target size={14} color="#9ca3af" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title ?? a.asin}</p>
+                      <p style={{ fontSize: 10.5, color: '#9ca3af', margin: '2px 0 0' }}>Electronics</p>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <p style={{ fontSize: 12.5, fontWeight: 700, color: '#111827', margin: 0 }}>₹{Number(a.triggered_price).toLocaleString('en-IN')}</p>
+                      <p style={{ fontSize: 10.5, color: '#34d399', fontWeight: 700, margin: '2px 0 0' }}>-{pct}% ↓</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-900 truncate">{a.title ?? a.asin}</p>
-                    <p className="text-xs text-gray-400">Electronics</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-xs font-bold text-gray-900">₹{Number(a.triggered_price).toLocaleString('en-IN')}</p>
-                    <span className="text-[10px] font-semibold" style={{ color: '#34d399' }}>
-                      -{Math.round(((parseFloat(a.target_price) - parseFloat(a.triggered_price)) / parseFloat(a.target_price)) * 100)}% ↓
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          <button className="w-full mt-4 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 flex items-center justify-center gap-1 transition">
+          <button style={{
+            width: '100%', marginTop: 16, padding: '8px 0', border: '1px solid #e5e7eb',
+            borderRadius: 10, background: 'transparent', fontSize: 12, fontWeight: 500,
+            color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          }}>
             View All Price Drops <ArrowUpRight size={12} />
           </button>
         </div>
       </div>
 
-      {/* Bottom row */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* Tracked Products table */}
-        <div className="col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-            <h2 className="font-bold text-gray-900">Your Tracked Products</h2>
-            <Link to="/products" className="text-xs font-medium" style={{ color: '#6c63ff' }}>View All</Link>
+      {/* Bottom row: Tracked Products Table + Donut */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
+
+        {/* Table */}
+        <div style={{ ...card, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #f9fafb' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>Your Tracked Products</h2>
+            <Link to="/products" style={{ fontSize: 12, fontWeight: 600, color: '#6c63ff', textDecoration: 'none' }}>View All</Link>
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-10">
-              <div className="w-6 h-6 border-3 border-purple-400 border-t-transparent rounded-full animate-spin" />
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+              <div style={{ width: 24, height: 24, border: '3px solid #e5e7eb', borderTopColor: '#6c63ff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
             </div>
           ) : tracked.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 text-sm">No products tracked yet</div>
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af', fontSize: 13 }}>No products tracked yet</div>
           ) : (
-            <table className="w-full">
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="text-xs text-gray-400 font-medium" style={{ background: '#fafafa' }}>
-                  <th className="text-left px-5 py-3">Product</th>
-                  <th className="text-right px-3 py-3">Current Price</th>
-                  <th className="text-right px-3 py-3">Target Price</th>
-                  <th className="text-right px-3 py-3">Lowest Price</th>
-                  <th className="text-center px-3 py-3">Alert Status</th>
-                  <th className="px-3 py-3" />
+                <tr style={{ background: '#fafafa', borderBottom: '1px solid #f3f4f6' }}>
+                  {['Product', 'Current Price', 'Target Price', 'Lowest Price', 'Alert Status', ''].map((h) => (
+                    <th key={h} style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#9ca3af', textAlign: h === 'Product' ? 'left' : 'right', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {tracked.slice(0, 5).map((item) => {
+                {tracked.slice(0, 5).map((item, idx) => {
                   const current = item.current_price ? parseFloat(item.current_price) : null;
-                  const target = item.target_price ? parseFloat(item.target_price) : null;
-                  const hitTarget = current !== null && target !== null && current <= target;
+                  const target  = item.target_price  ? parseFloat(item.target_price)  : null;
+                  const hit     = current !== null && target !== null && current <= target;
                   return (
-                    <tr key={item.id} className="border-t border-gray-50 hover:bg-gray-50/50 transition">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-3">
+                    <tr key={item.id} style={{ borderTop: idx > 0 ? '1px solid #f9fafb' : 'none' }}>
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           {item.image_url ? (
-                            <img src={item.image_url} className="w-9 h-9 object-contain rounded-lg bg-gray-50" alt="" />
+                            <img src={item.image_url} style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 8, background: '#f9fafb' }} alt="" />
                           ) : (
-                            <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-                              <Target size={13} className="text-gray-300" />
+                            <div style={{ width: 36, height: 36, background: '#f3f4f6', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Target size={13} color="#d1d5db" />
                             </div>
                           )}
                           <div>
-                            <p className="text-sm font-medium text-gray-900 max-w-[220px] truncate">{item.title ?? item.asin}</p>
-                            <p className="text-xs text-gray-400">{item.asin} • Electronics</p>
+                            <p style={{ fontSize: 12.5, fontWeight: 600, color: '#111827', margin: 0, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {item.title ?? item.asin}
+                            </p>
+                            <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>{item.asin} • Electronics</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <span className="text-sm font-semibold text-gray-900">
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
                             {current ? `₹${current.toLocaleString('en-IN')}` : '—'}
                           </span>
-                          {hitTarget && <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium">-20%</span>}
+                          {hit && <span style={{ fontSize: 10, background: '#fee2e2', color: '#ef4444', padding: '2px 7px', borderRadius: 20, fontWeight: 700 }}>-20%</span>}
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-right text-sm text-gray-600">
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, color: '#374151' }}>
                         {target ? `₹${target.toLocaleString('en-IN')}` : '—'}
                       </td>
-                      <td className="px-3 py-3 text-right text-sm text-gray-600">
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, color: '#374151' }}>
                         {current ? `₹${current.toLocaleString('en-IN')}` : '—'}
                       </td>
-                      <td className="px-3 py-3 text-center">
-                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full ${
-                          item.is_active
-                            ? 'bg-green-50 text-green-600'
-                            : 'bg-gray-100 text-gray-400'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${item.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20,
+                          background: item.is_active ? '#ecfdf5' : '#f3f4f6',
+                          color: item.is_active ? '#059669' : '#9ca3af',
+                        }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: item.is_active ? '#10b981' : '#d1d5db', flexShrink: 0 }} />
                           {item.is_active ? 'Active' : 'Paused'}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-center">
-                        <a href={item.url} target="_blank" rel="noreferrer" className="p-1 rounded-lg hover:bg-gray-100 inline-block transition">
-                          <ExternalLink size={13} className="text-gray-400" />
+                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                        <a href={item.url} target="_blank" rel="noreferrer" style={{ color: '#9ca3af', display: 'inline-block' }}>
+                          <ExternalLink size={13} />
                         </a>
                       </td>
                     </tr>
@@ -301,42 +327,49 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Price Alert Summary donut */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-bold text-gray-900 mb-4">Price Alert Summary</h2>
-          <div className="flex items-center justify-center">
-            <div className="relative">
-              <PieChart width={160} height={160}>
-                <Pie data={PIE_DATA} cx={75} cy={75} innerRadius={50} outerRadius={72}
-                  paddingAngle={3} dataKey="value" strokeWidth={0}>
-                  {PIE_DATA.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-              </PieChart>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-gray-900">{PIE_DATA.reduce((a, b) => a + b.value, 0)}</span>
-                <span className="text-xs text-gray-400">Total Alerts</span>
-              </div>
+        {/* Donut chart */}
+        <div style={{ ...card, padding: 20 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: '0 0 16px' }}>Price Alert Summary</h2>
+
+          <div style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
+            <PieChart width={170} height={170}>
+              <Pie data={PIE_DATA} cx={80} cy={80} innerRadius={52} outerRadius={75}
+                paddingAngle={3} dataKey="value" strokeWidth={0}>
+                {PIE_DATA.map((e, i) => <Cell key={i} fill={e.color} />)}
+              </Pie>
+            </PieChart>
+            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
+              <p style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: 0, lineHeight: 1 }}>{PIE_TOTAL}</p>
+              <p style={{ fontSize: 10.5, color: '#9ca3af', margin: '3px 0 0' }}>Total Alerts</p>
             </div>
           </div>
-          <div className="mt-4 space-y-2">
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
             {PIE_DATA.map((d) => (
-              <div key={d.name} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                  <span className="text-xs text-gray-600">{d.name}</span>
+              <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: '#374151' }}>{d.name}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-gray-800">{d.value}</span>
-                  <span className="text-xs text-gray-400">({Math.round((d.value / 11) * 100)}%)</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>{d.value}</span>
+                  <span style={{ fontSize: 11, color: '#9ca3af' }}>({Math.round((d.value / PIE_TOTAL) * 100)}%)</span>
                 </div>
               </div>
             ))}
           </div>
-          <button className="w-full mt-4 py-2 rounded-xl text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition flex items-center justify-center gap-1.5">
-            <Target size={12} /> Manage Alerts
+
+          <button style={{
+            width: '100%', marginTop: 16, padding: '9px 0', border: '1px solid #e5e7eb',
+            borderRadius: 10, background: 'transparent', fontSize: 12, fontWeight: 600,
+            color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <Target size={13} /> Manage Alerts
           </button>
         </div>
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getTracking, getAlerts } from '../api/tracking';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  AreaChart, Area, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import {
   Target, Bell, TrendingDown, Wallet,
-  MoreHorizontal, ArrowUpRight, ExternalLink, MoreVertical,
+  ArrowUpRight, ExternalLink, Package,
+  Plus, Activity, ChevronRight, Zap,
+  MoreHorizontal, ShoppingBag,
 } from 'lucide-react';
+import { useAuthStore } from '../store/auth';
 import toast from 'react-hot-toast';
 
 interface TrackedItem {
@@ -18,7 +22,7 @@ interface TrackedItem {
 }
 interface AlertItem {
   id: string; target_price: string; triggered_price: string;
-  sent_at: string; title: string | null; url: string; asin: string; image_url?: string;
+  sent_at: string; title: string | null; url: string; asin: string;
 }
 
 const MOCK_HISTORY = [
@@ -30,9 +34,6 @@ const MOCK_HISTORY = [
   { date: 'Jun 1', price: 19990 },
 ];
 
-const SPARKLINE_UP   = [10, 12, 11, 14, 13, 15, 14, 16];
-const SPARKLINE_DOWN = [16, 15, 14, 13, 12, 11, 11, 10];
-
 const PIE_DATA = [
   { name: 'Active',    value: 6, color: '#34d399' },
   { name: 'Triggered', value: 3, color: '#fbbf24' },
@@ -41,41 +42,50 @@ const PIE_DATA = [
 ];
 const PIE_TOTAL = PIE_DATA.reduce((a, b) => a + b.value, 0);
 
-const STAT_CARDS = [
-  { label: 'Tracked Products',   icon: Target,       iconColor: '#818cf8', iconBg: '#eef2ff', key: 'tracked', trend: '+3 this week' },
-  { label: 'Total Price Alerts', icon: Bell,          iconColor: '#34d399', iconBg: '#ecfdf5', key: 'alerts',  trend: '+2 this week' },
-  { label: 'Price Drops',        icon: TrendingDown,  iconColor: '#fbbf24', iconBg: '#fffbeb', key: 'drops',   trend: '+4 this week' },
-  { label: 'Total Saved',        icon: Wallet,        iconColor: '#60a5fa', iconBg: '#eff6ff', key: 'saved',   trend: 'All time' },
-];
-
-const TIME_FILTERS = ['1M', '3M', '6M', '1Y', 'All'];
+const SPARKLINE_UP   = [10, 12, 11, 14, 13, 15, 14, 16];
+const SPARKLINE_DOWN = [16, 15, 14, 13, 12, 11, 11, 10];
+const TIME_FILTERS   = ['1M', '3M', '6M', '1Y', 'All'];
 
 const card: React.CSSProperties = {
-  background: '#fff',
-  borderRadius: 18,
-  border: '1px solid #eef0f6',
-  boxShadow: '0 2px 8px rgba(0,0,0,.05)',
+  background: '#fff', borderRadius: 20,
+  border: '1px solid #eef0f6', boxShadow: '0 2px 12px rgba(0,0,0,.05)',
 };
 
-const ChartTooltip = ({ active, payload, label }: any) => {
+function ChartTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: '#1e2140', borderRadius: 12, padding: '8px 14px', boxShadow: '0 8px 24px rgba(0,0,0,.2)' }}>
+    <div style={{ background: '#1e2140', borderRadius: 12, padding: '9px 14px', boxShadow: '0 8px 24px rgba(0,0,0,.25)' }}>
       <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 3px' }}>{label}</p>
-      <p style={{ fontSize: 14, fontWeight: 800, color: '#fff', margin: 0 }}>₹{payload[0].value.toLocaleString('en-IN')}</p>
+      <p style={{ fontSize: 15, fontWeight: 800, color: '#fff', margin: 0 }}>₹{payload[0]?.value?.toLocaleString('en-IN')}</p>
     </div>
   );
-};
+}
 
-const MiniSparkline = ({ data, color }: { data: number[]; color: string }) => (
-  <ResponsiveContainer width={72} height={30}>
-    <LineChart data={data.map((v, i) => ({ i, v }))}>
-      <Line type="monotone" dataKey="v" stroke={color} strokeWidth={2} dot={false} />
-    </LineChart>
-  </ResponsiveContainer>
-);
+function MiniSpark({ data, color }: { data: number[]; color: string }) {
+  return (
+    <ResponsiveContainer width={64} height={28}>
+      <LineChart data={data.map((v, i) => ({ i, v }))}>
+        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={2} dot={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ProductThumb({ src, size = 40 }: { src: string | null; size?: number }) {
+  const [err, setErr] = useState(false);
+  if (!src || err) {
+    return (
+      <div style={{ width: size, height: size, borderRadius: 11, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Package size={size * 0.38} color="#d1d5db" />
+      </div>
+    );
+  }
+  return <img src={src} onError={() => setErr(true)} alt="" style={{ width: size, height: size, objectFit: 'contain', borderRadius: 11, background: '#f9fafb', padding: 4, border: '1px solid #eef0f6', flexShrink: 0 }} />;
+}
 
 export default function Dashboard() {
+  const navigate  = useNavigate();
+  const { user }  = useAuthStore();
   const [tracked, setTracked] = useState<TrackedItem[]>([]);
   const [alerts,  setAlerts]  = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,122 +101,165 @@ export default function Dashboard() {
   const totalSaved = alerts.reduce((acc, a) =>
     acc + Math.max(0, parseFloat(a.target_price) - parseFloat(a.triggered_price)), 0);
 
-  const statValues: Record<string, string | number> = {
-    tracked: tracked.length,
-    alerts:  alerts.length,
-    drops:   alerts.length,
-    saved:   `₹${totalSaved.toLocaleString('en-IN')}`,
-  };
+  const displayName = user?.email?.split('@')[0] ?? 'User';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  const statCards = [
+    {
+      label: 'Tracked Products', value: tracked.length, icon: ShoppingBag,
+      gradient: 'linear-gradient(135deg,#6c63ff,#a78bfa)',
+      glow: 'rgba(108,99,255,.25)', trend: tracked.length, trendLabel: 'total',
+    },
+    {
+      label: 'Price Alerts', value: alerts.length, icon: Bell,
+      gradient: 'linear-gradient(135deg,#10b981,#34d399)',
+      glow: 'rgba(16,185,129,.25)', trend: alerts.length, trendLabel: 'triggered',
+    },
+    {
+      label: 'Price Drops', value: alerts.length, icon: TrendingDown,
+      gradient: 'linear-gradient(135deg,#f59e0b,#fbbf24)',
+      glow: 'rgba(245,158,11,.25)', trend: alerts.length, trendLabel: 'this month',
+    },
+    {
+      label: 'Total Saved', value: `₹${totalSaved.toLocaleString('en-IN')}`, icon: Wallet,
+      gradient: 'linear-gradient(135deg,#3b82f6,#60a5fa)',
+      glow: 'rgba(59,130,246,.25)', trend: null, trendLabel: 'all time',
+    },
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      {/* Title */}
-      <div>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0f1117', margin: 0, letterSpacing: '-.5px' }}>Dashboard</h1>
-        <p style={{ fontSize: 13.5, color: '#9ca3af', marginTop: 4 }}>Track, analyze and save on Amazon</p>
+
+      {/* ── Welcome Banner ── */}
+      <div style={{
+        borderRadius: 22, overflow: 'hidden', position: 'relative',
+        background: 'linear-gradient(135deg, #13152e 0%, #1e2248 60%, #252868 100%)',
+        padding: '28px 32px',
+        boxShadow: '0 8px 32px rgba(108,99,255,.2)',
+      }}>
+        {/* Decorative blobs */}
+        <div style={{ position: 'absolute', top: -40, right: 120, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(108,99,255,.25) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -20, right: -20, width: 140, height: 140, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+          <div>
+            <p style={{ fontSize: 13, color: '#a78bfa', fontWeight: 600, margin: '0 0 6px', letterSpacing: '.5px' }}>
+              {greeting}, {displayName} 👋
+            </p>
+            <h1 style={{ fontSize: 28, fontWeight: 900, color: '#fff', margin: 0, letterSpacing: '-.5px', lineHeight: 1.2 }}>
+              {tracked.length === 0
+                ? 'Start tracking your first product'
+                : `You're tracking ${tracked.length} product${tracked.length !== 1 ? 's' : ''}`
+              }
+            </h1>
+            <p style={{ fontSize: 13.5, color: '#6b7280', marginTop: 8, lineHeight: 1.6 }}>
+              {tracked.length === 0
+                ? 'Paste any Amazon product URL to monitor price changes and get instant alerts.'
+                : `${alerts.length} price alert${alerts.length !== 1 ? 's' : ''} triggered · ₹${totalSaved.toLocaleString('en-IN')} saved total`
+              }
+            </p>
+          </div>
+
+          <button onClick={() => navigate('/products')} style={{
+            display: 'flex', alignItems: 'center', gap: 9,
+            padding: '13px 24px', borderRadius: 14, border: 'none',
+            background: 'linear-gradient(135deg,#6c63ff,#a78bfa)',
+            color: '#fff', fontWeight: 700, fontSize: 14,
+            cursor: 'pointer', flexShrink: 0,
+            boxShadow: '0 6px 20px rgba(108,99,255,.5)',
+            transition: 'transform .15s',
+          }}
+            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.04)')}
+            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
+            <Plus size={16} />
+            {tracked.length === 0 ? 'Add Product' : 'Track More'}
+          </button>
+        </div>
       </div>
 
       {/* ── Stat Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        {STAT_CARDS.map(({ label, icon: Icon, iconColor, iconBg, key, trend }) => (
-          <div key={key} style={{ ...card, padding: '22px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+        {statCards.map(({ label, value, icon: Icon, gradient, glow, trendLabel }) => (
+          <div key={label} style={{ ...card, padding: '22px 22px 20px', position: 'relative', overflow: 'hidden' }}>
+            {/* Subtle gradient corner blob */}
+            <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, borderRadius: '50%', background: glow, pointerEvents: 'none' }} />
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{
-                width: 52, height: 52, borderRadius: 15, background: iconBg, flexShrink: 0,
+                width: 46, height: 46, borderRadius: 14, background: gradient,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: `0 4px 12px ${iconColor}30`,
+                boxShadow: `0 6px 16px ${glow}`,
               }}>
-                <Icon size={24} color={iconColor} strokeWidth={1.8} />
+                <Icon size={20} color="#fff" strokeWidth={2} />
               </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 12, color: '#9ca3af', fontWeight: 500, margin: 0, lineHeight: 1 }}>{label}</p>
-                <p style={{ fontSize: 30, fontWeight: 800, color: '#0f1117', lineHeight: 1.1, margin: '6px 0 0', letterSpacing: '-1px' }}>
-                  {statValues[key]}
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#10b981' }}>
-                    {key !== 'saved' ? `+${Math.max(0, (statValues[key] as number))} ` : ''}
-                  </span>
-                  <span style={{ fontSize: 11.5, color: '#10b981', fontWeight: 600 }}>{trend}</span>
-                </div>
-              </div>
+              <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, background: '#f8f9fc', padding: '4px 10px', borderRadius: 20, border: '1px solid #eef0f6' }}>
+                {trendLabel}
+              </span>
             </div>
+
+            <p style={{ fontSize: 12.5, color: '#9ca3af', fontWeight: 500, margin: 0 }}>{label}</p>
+            <p style={{ fontSize: 32, fontWeight: 900, color: '#0f1117', margin: '6px 0 0', lineHeight: 1, letterSpacing: '-1.5px' }}>
+              {value}
+            </p>
           </div>
         ))}
       </div>
 
-      {/* ── Middle Row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 310px', gap: 18 }}>
+      {/* ── Middle Row: Chart + Recent Drops ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 18 }}>
 
-        {/* Price History Chart */}
-        <div style={{ ...card, padding: '22px 24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f1117', margin: 0 }}>Price History</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+        {/* Price History */}
+        <div style={{ ...card, padding: '24px 24px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div>
+              <h2 style={{ fontSize: 17, fontWeight: 800, color: '#0f1117', margin: 0 }}>Price History</h2>
+              <p style={{ fontSize: 12, color: '#9ca3af', margin: '3px 0 0' }}>
+                {tracked.length === 0 ? 'Add products to see real price trends' : `${tracked[0]?.title?.slice(0, 40) ?? 'Product'}…`}
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               {TIME_FILTERS.map(f => (
                 <button key={f} onClick={() => setActiveFilter(f)} style={{
-                  padding: '5px 11px', borderRadius: 9, fontSize: 12, fontWeight: 600,
+                  padding: '5px 12px', borderRadius: 9, fontSize: 12, fontWeight: 600,
                   border: 'none', cursor: 'pointer', transition: 'all .15s',
                   background: activeFilter === f ? '#6c63ff' : 'transparent',
                   color: activeFilter === f ? '#fff' : '#9ca3af',
                 }}>{f}</button>
               ))}
-              <button style={{ padding: '5px 8px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                <MoreHorizontal size={16} color="#9ca3af" />
+              <button style={{ padding: '5px 7px', border: 'none', background: 'transparent', cursor: 'pointer', marginLeft: 4 }}>
+                <MoreHorizontal size={15} color="#9ca3af" />
               </button>
             </div>
           </div>
 
-          {tracked[0] ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, padding: '12px 14px', background: '#f8f9fc', borderRadius: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {tracked[0].image_url
-                  ? <img src={tracked[0].image_url} style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 10, background: '#fff', padding: 4, border: '1px solid #eef0f6' }} alt="" />
-                  : <div style={{ width: 44, height: 44, borderRadius: 10, background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Package size={18} color="#9ca3af" /></div>
-                }
-                <div>
-                  <p style={{ fontSize: 13.5, fontWeight: 700, color: '#111827', margin: 0, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {tracked[0].title ?? tracked[0].asin}
-                  </p>
-                  <p style={{ fontSize: 11.5, color: '#9ca3af', margin: '3px 0 0' }}>{tracked[0].asin} • Electronics</p>
-                </div>
-              </div>
-              {tracked[0].current_price && (
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 18, fontWeight: 800, color: '#0f1117' }}>₹{Number(tracked[0].current_price).toLocaleString('en-IN')}</span>
-                    <span style={{ fontSize: 11, background: '#fee2e2', color: '#ef4444', padding: '3px 9px', borderRadius: 20, fontWeight: 800 }}>-20%</span>
-                  </div>
-                  <p style={{ fontSize: 11, color: '#9ca3af', margin: '4px 0 0' }}>
-                    Min: ₹{Number(tracked[0].current_price).toLocaleString('en-IN')} &nbsp;|&nbsp;
-                    Max: ₹{(Number(tracked[0].current_price) * 1.25).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p style={{ fontSize: 12.5, color: '#9ca3af', marginBottom: 16 }}>No tracked products yet</p>
-          )}
-
-          <ResponsiveContainer width="100%" height={210}>
-            <LineChart data={MOCK_HISTORY} margin={{ top: 6, right: 6, left: -5, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={MOCK_HISTORY} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
+              <defs>
+                <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#6c63ff" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#6c63ff" stopOpacity={0}    />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="4 4" stroke="#f3f4f6" vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#c4c9d4' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#c4c9d4' }} axisLine={false} tickLine={false}
                 tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
-              <Tooltip content={<ChartTooltip />} />
-              <Line type="monotone" dataKey="price" stroke="#6c63ff" strokeWidth={2.5}
+              <Tooltip content={<ChartTip />} />
+              <Area type="monotone" dataKey="price" stroke="#6c63ff" strokeWidth={2.5}
+                fill="url(#priceGrad)"
                 dot={false} activeDot={{ r: 6, fill: '#6c63ff', stroke: '#fff', strokeWidth: 3 }} />
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
 
-          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12, background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 13, padding: '11px 16px' }}>
-            <div style={{ width: 30, height: 30, background: '#dcfce7', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Target size={14} color="#16a34a" />
+          {/* Bottom highlight bar */}
+          <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg,#f0fdf4,#ecfdf5)', border: '1.5px solid #bbf7d0', borderRadius: 14, padding: '12px 16px' }}>
+            <div style={{ width: 34, height: 34, background: '#dcfce7', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Zap size={15} color="#16a34a" />
             </div>
             <div>
-              <p style={{ fontSize: 12.5, fontWeight: 800, color: '#166534', margin: 0 }}>Lowest price ever</p>
-              <p style={{ fontSize: 11.5, color: '#16a34a', margin: '2px 0 0' }}>You saved ₹5,000 (20%) by waiting!</p>
+              <p style={{ fontSize: 12.5, fontWeight: 800, color: '#166534', margin: 0 }}>Lowest price in 3 months</p>
+              <p style={{ fontSize: 11.5, color: '#16a34a', margin: '2px 0 0' }}>₹19,990 — You saved ₹4,010 (17%) by tracking!</p>
             </div>
           </div>
         </div>
@@ -214,68 +267,100 @@ export default function Dashboard() {
         {/* Recent Price Drops */}
         <div style={{ ...card, padding: '22px 20px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f1117', margin: 0 }}>Recent Price Drops</h2>
-            <Link to="/alerts" style={{ fontSize: 12, fontWeight: 700, color: '#6c63ff', textDecoration: 'none' }}>View All</Link>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0f1117', margin: 0 }}>Recent Drops</h2>
+            <Link to="/alerts" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 700, color: '#6c63ff', textDecoration: 'none' }}>
+              View All <ChevronRight size={13} />
+            </Link>
           </div>
 
           {alerts.length === 0 ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px 0' }}>
-              <TrendingDown size={36} color="#e5e7eb" />
-              <p style={{ fontSize: 12.5, color: '#9ca3af', marginTop: 10 }}>No price drops yet</p>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 12px', textAlign: 'center' }}>
+              <div style={{ width: 60, height: 60, borderRadius: 18, background: 'linear-gradient(135deg,#f0fdf4,#ecfdf5)', border: '1.5px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                <TrendingDown size={26} color="#34d399" strokeWidth={1.8} />
+              </div>
+              <p style={{ fontSize: 13.5, fontWeight: 700, color: '#374151', margin: 0 }}>No drops yet</p>
+              <p style={{ fontSize: 12, color: '#9ca3af', margin: '6px 0 16px', lineHeight: 1.5 }}>
+                Set a target price on any tracked product to get notified instantly
+              </p>
+              <button onClick={() => navigate('/products')} style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '9px 18px', borderRadius: 11, border: 'none',
+                background: '#eef2ff', color: '#6c63ff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+              }}>
+                <Plus size={13} /> Add Product
+              </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
               {alerts.slice(0, 5).map((a) => {
                 const pct = Math.round(((parseFloat(a.target_price) - parseFloat(a.triggered_price)) / parseFloat(a.target_price)) * 100);
                 return (
                   <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                    <div style={{ width: 42, height: 42, background: '#f3f4f6', borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                      {a.image_url
-                        ? <img src={a.image_url} style={{ width: 42, height: 42, objectFit: 'contain' }} alt="" />
-                        : <Target size={16} color="#d1d5db" />}
-                    </div>
+                    <ProductThumb src={null} size={40} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 12.5, fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title ?? a.asin}</p>
-                      <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>Electronics</p>
+                      <p style={{ fontSize: 12.5, fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {a.title ?? a.asin}
+                      </p>
+                      <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>
+                        {new Date(a.sent_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: 0 }}>₹{Number(a.triggered_price).toLocaleString('en-IN')}</p>
-                      <p style={{ fontSize: 11, color: '#10b981', fontWeight: 700, margin: '3px 0 0' }}>-{pct}% ↓</p>
+                      <span style={{ fontSize: 10.5, background: '#dcfce7', color: '#16a34a', padding: '2px 7px', borderRadius: 20, fontWeight: 800 }}>-{pct}%</span>
                     </div>
                   </div>
                 );
               })}
             </div>
           )}
-
-          <button style={{ marginTop: 'auto', paddingTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, background: 'transparent', border: 'none', fontSize: 12.5, fontWeight: 600, color: '#6b7280', cursor: 'pointer' }}>
-            View All Price Drops <ArrowUpRight size={13} />
-          </button>
         </div>
       </div>
 
-      {/* ── Bottom Row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 310px', gap: 18 }}>
+      {/* ── Bottom Row: Products Table + Alert Summary ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 18 }}>
 
-        {/* Tracked Products Table */}
+        {/* Tracked Products */}
         <div style={{ ...card, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1.5px solid #f3f4f6' }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f1117', margin: 0 }}>Your Tracked Products</h2>
-            <Link to="/products" style={{ fontSize: 12, fontWeight: 700, color: '#6c63ff', textDecoration: 'none' }}>View All</Link>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1.5px solid #f3f4f6' }}>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0f1117', margin: 0 }}>Tracked Products</h2>
+              <p style={{ fontSize: 12, color: '#9ca3af', margin: '3px 0 0' }}>{tracked.length} product{tracked.length !== 1 ? 's' : ''} being monitored</p>
+            </div>
+            <Link to="/products" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, fontWeight: 700, color: '#6c63ff', textDecoration: 'none', background: '#eef2ff', padding: '7px 14px', borderRadius: 10 }}>
+              View All <ArrowUpRight size={13} />
+            </Link>
           </div>
 
           {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 52 }}>
               <div style={{ width: 28, height: 28, border: '3px solid #eef0f6', borderTopColor: '#6c63ff', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
             </div>
           ) : tracked.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af', fontSize: 13.5 }}>No products tracked yet</div>
+            <div style={{ textAlign: 'center', padding: '52px 24px' }}>
+              <div style={{ width: 64, height: 64, borderRadius: 20, background: 'linear-gradient(135deg,#eef2ff,#e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 4px 16px rgba(108,99,255,.12)' }}>
+                <ShoppingBag size={28} color="#818cf8" strokeWidth={1.6} />
+              </div>
+              <p style={{ fontSize: 15, fontWeight: 700, color: '#374151', margin: 0 }}>No products tracked yet</p>
+              <p style={{ fontSize: 13, color: '#9ca3af', margin: '6px 0 20px', lineHeight: 1.6 }}>
+                Paste any Amazon URL and we'll watch<br />the price 24/7 for you.
+              </p>
+              <button onClick={() => navigate('/products')} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '11px 22px', borderRadius: 12, border: 'none',
+                background: 'linear-gradient(135deg,#6c63ff,#a78bfa)',
+                color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                boxShadow: '0 6px 18px rgba(108,99,255,.35)',
+              }}>
+                <Plus size={15} /> Track your first product
+              </button>
+            </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#fafbfc' }}>
-                  {['Product', 'Current Price', 'Target Price', 'Price Trend', 'Lowest Price', 'Alert Status', ''].map((h, i) => (
-                    <th key={i} style={{ padding: '11px 16px', fontSize: 11.5, fontWeight: 600, color: '#9ca3af', textAlign: i === 0 ? 'left' : 'center', borderBottom: '1.5px solid #f3f4f6', whiteSpace: 'nowrap' }}>{h}</th>
+                  {['Product', 'Current Price', 'Target', 'Trend', 'Status', ''].map((h, i) => (
+                    <th key={i} style={{ padding: '11px 18px', fontSize: 11.5, fontWeight: 600, color: '#9ca3af', textAlign: i === 0 ? 'left' : 'center', borderBottom: '1.5px solid #f3f4f6', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -285,48 +370,46 @@ export default function Dashboard() {
                   const target  = item.target_price  ? parseFloat(item.target_price)  : null;
                   const hit     = current !== null && target !== null && current <= target;
                   return (
-                    <tr key={item.id} style={{ borderBottom: idx < tracked.length - 1 ? '1px solid #f9fafb' : 'none' }}>
-                      <td style={{ padding: '13px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                          {item.image_url
-                            ? <img src={item.image_url} style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 9, background: '#f9fafb', padding: 3, border: '1px solid #eef0f6' }} alt="" />
-                            : <div style={{ width: 38, height: 38, background: '#f3f4f6', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Target size={14} color="#d1d5db" /></div>
-                          }
+                    <tr key={item.id} style={{ borderBottom: idx < Math.min(tracked.length, 5) - 1 ? '1px solid #f9fafb' : 'none', transition: 'background .1s' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#fafbfc')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <td style={{ padding: '13px 18px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <ProductThumb src={item.image_url} size={40} />
                           <div>
                             <p style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: 0, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title ?? item.asin}</p>
-                            <p style={{ fontSize: 11, color: '#9ca3af', margin: '3px 0 0' }}>{item.asin} • Electronics</p>
+                            <p style={{ fontSize: 11, color: '#9ca3af', margin: '3px 0 0' }}>{item.asin}</p>
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '13px 16px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                          <span style={{ fontSize: 13.5, fontWeight: 700, color: '#111827' }}>{current ? `₹${current.toLocaleString('en-IN')}` : '—'}</span>
-                          {hit && <span style={{ fontSize: 10, background: '#fee2e2', color: '#ef4444', padding: '2px 7px', borderRadius: 20, fontWeight: 800 }}>-20%</span>}
+                      <td style={{ padding: '13px 18px', textAlign: 'center' }}>
+                        <div>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: hit ? '#10b981' : '#111827' }}>
+                            {current ? `₹${current.toLocaleString('en-IN')}` : '—'}
+                          </span>
+                          {hit && <div style={{ fontSize: 10, background: '#dcfce7', color: '#16a34a', padding: '2px 7px', borderRadius: 20, fontWeight: 800, display: 'inline-block', marginLeft: 6 }}>Hit!</div>}
                         </div>
                       </td>
-                      <td style={{ padding: '13px 16px', textAlign: 'center', fontSize: 13, color: '#374151', fontWeight: 500 }}>
-                        {target ? `₹${target.toLocaleString('en-IN')}` : '—'}
+                      <td style={{ padding: '13px 18px', textAlign: 'center', fontSize: 13, color: '#374151', fontWeight: 500 }}>
+                        {target ? `₹${target.toLocaleString('en-IN')}` : <span style={{ color: '#c4c9d4' }}>—</span>}
                       </td>
-                      <td style={{ padding: '13px 16px', textAlign: 'center' }}>
-                        <MiniSparkline data={hit ? SPARKLINE_DOWN : SPARKLINE_UP} color={hit ? '#34d399' : '#6c63ff'} />
+                      <td style={{ padding: '13px 18px', textAlign: 'center' }}>
+                        <MiniSpark data={hit ? SPARKLINE_DOWN : SPARKLINE_UP} color={hit ? '#34d399' : '#6c63ff'} />
                       </td>
-                      <td style={{ padding: '13px 16px', textAlign: 'center', fontSize: 13, color: '#374151', fontWeight: 500 }}>
-                        {current ? `₹${current.toLocaleString('en-IN')}` : '—'}
-                      </td>
-                      <td style={{ padding: '13px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '13px 18px', textAlign: 'center' }}>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontSize: 11.5, fontWeight: 700, padding: '5px 11px', borderRadius: 20,
+                          fontSize: 11.5, fontWeight: 700, padding: '5px 12px', borderRadius: 20,
                           background: item.is_active ? '#ecfdf5' : '#f3f4f6',
                           color: item.is_active ? '#059669' : '#9ca3af',
                         }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: item.is_active ? '#10b981' : '#d1d5db' }} />
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: item.is_active ? '#10b981' : '#d1d5db' }} />
                           {item.is_active ? 'Active' : 'Paused'}
                         </span>
                       </td>
-                      <td style={{ padding: '13px 12px', textAlign: 'center' }}>
-                        <a href={item.url} target="_blank" rel="noreferrer">
-                          <MoreVertical size={15} color="#d1d5db" />
+                      <td style={{ padding: '13px 14px', textAlign: 'center' }}>
+                        <a href={item.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', padding: 6, borderRadius: 8, background: '#f3f4f6', color: '#9ca3af', transition: 'all .15s' }}>
+                          <ExternalLink size={13} />
                         </a>
                       </td>
                     </tr>
@@ -338,64 +421,52 @@ export default function Dashboard() {
         </div>
 
         {/* Price Alert Summary */}
-        <div style={{ ...card, padding: '22px 20px' }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f1117', margin: '0 0 20px' }}>Price Alert Summary</h2>
+        <div style={{ ...card, padding: '22px 20px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0f1117', margin: 0 }}>Alert Summary</h2>
+            <span style={{ fontSize: 11, color: '#6c63ff', background: '#eef2ff', padding: '4px 10px', borderRadius: 20, fontWeight: 700 }}>Live</span>
+          </div>
+          <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px' }}>Breakdown of your price alerts</p>
 
-          <div style={{ display: 'flex', justifyContent: 'center', position: 'relative', marginBottom: 4 }}>
-            <PieChart width={175} height={175}>
-              <Pie data={PIE_DATA} cx={83} cy={83} innerRadius={54} outerRadius={78}
+          <div style={{ display: 'flex', justifyContent: 'center', position: 'relative', marginBottom: 8 }}>
+            <PieChart width={170} height={170}>
+              <Pie data={PIE_DATA} cx={81} cy={81} innerRadius={52} outerRadius={76}
                 paddingAngle={3} dataKey="value" strokeWidth={0}>
                 {PIE_DATA.map((e, i) => <Cell key={i} fill={e.color} />)}
               </Pie>
             </PieChart>
             <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-              <p style={{ fontSize: 30, fontWeight: 800, color: '#0f1117', margin: 0, lineHeight: 1, letterSpacing: '-1px' }}>{PIE_TOTAL}</p>
-              <p style={{ fontSize: 11, color: '#9ca3af', margin: '4px 0 0', fontWeight: 500 }}>Total Alerts</p>
+              <p style={{ fontSize: 32, fontWeight: 900, color: '#0f1117', margin: 0, lineHeight: 1, letterSpacing: '-1.5px' }}>{PIE_TOTAL}</p>
+              <p style={{ fontSize: 11, color: '#9ca3af', margin: '5px 0 0', fontWeight: 500 }}>Total Alerts</p>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
             {PIE_DATA.map(d => (
               <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                   <span style={{ fontSize: 12.5, color: '#374151', fontWeight: 500 }}>{d.name}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{d.value}</span>
-                  <span style={{ fontSize: 11.5, color: '#9ca3af' }}>({Math.round((d.value / PIE_TOTAL) * 100)}%)</span>
+                  <span style={{ fontSize: 11, color: '#c4c9d4', minWidth: 40, textAlign: 'right' }}>({Math.round((d.value / PIE_TOTAL) * 100)}%)</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <button style={{
-            width: '100%', marginTop: 20, padding: '10px 0',
-            border: '1.5px solid #eef0f6', borderRadius: 11,
-            background: '#fafbfc', fontSize: 12.5, fontWeight: 600,
-            color: '#374151', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          <button onClick={() => navigate('/alerts')} style={{
+            marginTop: 'auto', paddingTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            background: 'transparent', border: 'none', fontSize: 13, fontWeight: 700,
+            color: '#6c63ff', cursor: 'pointer',
           }}>
-            <Target size={13} color="#6b7280" /> Manage Alerts
+            <Activity size={14} /> Manage Alerts
           </button>
         </div>
       </div>
 
-      <p style={{ textAlign: 'center', fontSize: 11.5, color: '#c4c9d4', marginTop: 4 }}>
-        🔒 We never share your data. Your data is 100% secure.
-      </p>
-
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
-  );
-}
-
-// needed for TS
-function Package({ size, color }: { size: number; color: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8">
-      <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
-      <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
-    </svg>
   );
 }

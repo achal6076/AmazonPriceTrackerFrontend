@@ -1,15 +1,26 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getProducts, previewScrape, addProduct } from '../api/products';
-import { startTracking } from '../api/tracking';
-import { Search, Plus, ExternalLink, Loader2, Bell, X, Link2, Package, AlertCircle } from 'lucide-react';
+import { previewScrape, addProduct } from '../api/products';
+import { getTracking, startTracking, updateTracking, stopTracking } from '../api/tracking';
+import {
+  Search, Plus, ExternalLink, Loader2, Bell, X, Link2,
+  Package, AlertCircle, Trash2, Edit2, Check, PauseCircle, PlayCircle,
+} from 'lucide-react';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import toast from 'react-hot-toast';
 
-interface Product {
-  id: string; asin: string; title: string | null;
-  url: string; image_url: string | null;
-  current_price: string | null; retailer: string;
+interface TrackItem {
+  id: string;
+  product_id: string;
+  asin: string;
+  title: string | null;
+  url: string;
+  image_url: string | null;
+  current_price: string | null;
+  target_price: string | null;
+  is_active: boolean;
+  retailer: string;
+  created_at: string;
 }
 interface Preview {
   asin: string; title: string | null; price: number | null; currency: string; url: string;
@@ -22,59 +33,53 @@ const card: React.CSSProperties = {
 
 function ProductImage({ src, size = 42 }: { src: string | null; size?: number }) {
   const [failed, setFailed] = useState(false);
-  if (!src || failed) {
-    return (
-      <div style={{ width: size, height: size, background: '#f3f4f6', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Package size={size * 0.38} color="#d1d5db" />
-      </div>
-    );
-  }
-  return (
-    <img
-      src={src}
-      onError={() => setFailed(true)}
-      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 10, background: '#f9fafb', padding: 4, border: '1px solid #eef0f6', flexShrink: 0 }}
-      alt=""
-    />
+  if (!src || failed) return (
+    <div style={{ width: size, height: size, background: '#f3f4f6', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <Package size={size * 0.38} color="#d1d5db" />
+    </div>
   );
+  return <img src={src} onError={() => setFailed(true)} style={{ width: size, height: size, objectFit: 'contain', borderRadius: 10, background: '#f9fafb', padding: 4, border: '1px solid #eef0f6', flexShrink: 0 }} alt="" />;
 }
 
 export default function Products() {
   const { isMobile, isTablet } = useBreakpoint();
   const isSmall = isMobile || isTablet;
   const [searchParams, setSearchParams] = useSearchParams();
-  const [products, setProducts]   = useState<Product[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [url, setUrl]             = useState('');
+
+  const [tracked, setTracked]       = useState<TrackItem[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [url, setUrl]               = useState('');
   const [previewing, setPreviewing] = useState(false);
-  const [preview, setPreview]     = useState<Preview | null>(null);
+  const [preview, setPreview]       = useState<Preview | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [targetPrice, setTargetPrice] = useState('');
-  const [adding, setAdding]       = useState(false);
-  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [adding, setAdding]         = useState(false);
   const [localSearch, setLocalSearch] = useState(searchParams.get('q') ?? '');
 
+  // inline edit state
+  const [editingId, setEditingId]   = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState('');
+  const [savingId, setSavingId]     = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   useEffect(() => {
-    getProducts()
-      .then(d => setProducts(d.data))
-      .catch(() => toast.error('Failed to load products'))
+    getTracking()
+      .then(data => setTracked(Array.isArray(data) ? data : []))
+      .catch(() => toast.error('Failed to load tracked products'))
       .finally(() => setLoading(false));
   }, []);
 
-  // Sync local search with URL param
   useEffect(() => {
-    const q = searchParams.get('q') ?? '';
-    setLocalSearch(q);
+    setLocalSearch(searchParams.get('q') ?? '');
   }, [searchParams]);
 
   const filtered = useMemo(() => {
-    if (!localSearch.trim()) return products;
+    if (!localSearch.trim()) return tracked;
     const q = localSearch.toLowerCase();
-    return products.filter(p =>
-      (p.title ?? '').toLowerCase().includes(q) ||
-      p.asin.toLowerCase().includes(q)
+    return tracked.filter(t =>
+      (t.title ?? '').toLowerCase().includes(q) || t.asin.toLowerCase().includes(q)
     );
-  }, [products, localSearch]);
+  }, [tracked, localSearch]);
 
   const handlePreview = async () => {
     if (!url.trim()) return;
@@ -82,8 +87,7 @@ export default function Products() {
     setPreview(null);
     setPreviewError('');
     try {
-      const data = await previewScrape(url);
-      setPreview(data);
+      setPreview(await previewScrape(url));
     } catch (err: any) {
       const msg = err.response?.data?.error ?? 'Could not fetch product. Amazon may be blocking the request.';
       setPreviewError(msg);
@@ -98,8 +102,17 @@ export default function Products() {
     setAdding(true);
     try {
       const product = await addProduct({ asin: preview.asin, url: preview.url, title: preview.title ?? undefined });
-      await startTracking(product.id, targetPrice ? parseFloat(targetPrice) : undefined);
-      setProducts(prev => [product, ...prev]);
+      const trackEntry = await startTracking(product.id, targetPrice ? parseFloat(targetPrice) : undefined);
+      // Merge product fields into the tracking entry for display
+      setTracked(prev => [{
+        ...trackEntry,
+        asin: product.asin,
+        title: product.title,
+        url: product.url,
+        image_url: product.image_url ?? null,
+        current_price: preview.price ? String(preview.price) : null,
+        retailer: product.retailer ?? 'amazon',
+      }, ...prev]);
       toast.success('Product added and tracking started!');
       setUrl(''); setPreview(null); setTargetPrice(''); setPreviewError('');
     } catch (err: any) {
@@ -109,22 +122,46 @@ export default function Products() {
     }
   };
 
-  const handleTrack = async (productId: string) => {
-    setTrackingId(productId);
+  const handleSaveTarget = async (item: TrackItem) => {
+    setSavingId(item.id);
     try {
-      await startTracking(productId);
-      toast.success('Now tracking!');
-    } catch (err: any) {
-      const msg = err.response?.data?.error ?? 'Failed to start tracking';
-      toast.error(msg.includes('Conflict') ? 'Already tracking this product' : msg);
+      const updated = await updateTracking(item.id, {
+        target_price: editTarget ? parseFloat(editTarget) : null,
+      });
+      setTracked(prev => prev.map(t => t.id === item.id ? { ...t, target_price: updated.target_price } : t));
+      setEditingId(null);
+      toast.success('Target price updated');
+    } catch {
+      toast.error('Failed to update target price');
     } finally {
-      setTrackingId(null);
+      setSavingId(null);
     }
   };
 
-  const handleSearchClear = () => {
-    setLocalSearch('');
-    setSearchParams({});
+  const handleToggleActive = async (item: TrackItem) => {
+    setSavingId(item.id);
+    try {
+      await updateTracking(item.id, { is_active: !item.is_active });
+      setTracked(prev => prev.map(t => t.id === item.id ? { ...t, is_active: !t.is_active } : t));
+      toast.success(item.is_active ? 'Tracking paused' : 'Tracking resumed');
+    } catch {
+      toast.error('Failed to update tracking status');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleDelete = async (item: TrackItem) => {
+    setDeletingId(item.id);
+    try {
+      await stopTracking(item.id);
+      setTracked(prev => prev.filter(t => t.id !== item.id));
+      toast.success('Stopped tracking');
+    } catch {
+      toast.error('Failed to stop tracking');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -143,7 +180,7 @@ export default function Products() {
           </div>
           <div>
             <p style={{ fontSize: 14, fontWeight: 700, color: '#111827', margin: 0 }}>Add New Product</p>
-            <p style={{ fontSize: 12, color: '#9ca3af', margin: '2px 0 0' }}>Paste any Amazon product URL (amazon.in/dp/...) to fetch its details</p>
+            <p style={{ fontSize: 12, color: '#9ca3af', margin: '2px 0 0' }}>Paste any Amazon product URL to fetch details and start tracking</p>
           </div>
         </div>
 
@@ -154,7 +191,7 @@ export default function Products() {
               type="url" value={url}
               onChange={e => setUrl(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePreview()}
-              placeholder={isMobile ? 'Paste Amazon URL…' : 'https://www.amazon.in/dp/ASIN or paste full product URL'}
+              placeholder={isMobile ? 'Paste Amazon URL…' : 'https://www.amazon.in/dp/ASIN or full product URL'}
               style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: '#374151', minWidth: 0 }}
             />
             {url && (
@@ -164,9 +201,7 @@ export default function Products() {
               </button>
             )}
           </div>
-          <button
-            onClick={handlePreview}
-            disabled={previewing || !url.trim()}
+          <button onClick={handlePreview} disabled={previewing || !url.trim()}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               padding: '10px 22px', borderRadius: 12, border: 'none',
@@ -175,16 +210,14 @@ export default function Products() {
               fontSize: 13.5, fontWeight: 700,
               cursor: previewing || !url.trim() ? 'not-allowed' : 'pointer',
               boxShadow: url.trim() && !previewing ? '0 4px 14px rgba(108,99,255,.35)' : 'none',
-              transition: 'all .2s', whiteSpace: 'nowrap',
+              whiteSpace: 'nowrap',
             }}>
             {previewing
               ? <><Loader2 size={15} style={{ animation: 'spin .7s linear infinite' }} /> Fetching…</>
-              : <><Search size={15} /> Fetch Product</>
-            }
+              : <><Search size={15} /> Fetch Product</>}
           </button>
         </div>
 
-        {/* Error state */}
         {previewError && !preview && (
           <div style={{ marginTop: 12, display: 'flex', alignItems: 'flex-start', gap: 10, background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 12, padding: '12px 16px' }}>
             <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
@@ -196,9 +229,8 @@ export default function Products() {
           </div>
         )}
 
-        {/* Preview result */}
         {preview && (
-          <div style={{ marginTop: 14, padding: '16px 18px', background: '#f8f9fc', borderRadius: 14, border: '1.5px solid #eef0f6', display: 'flex', gap: 16, alignItems: 'center' }}>
+          <div style={{ marginTop: 14, padding: '16px 18px', background: '#f8f9fc', borderRadius: 14, border: '1.5px solid #eef0f6', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ width: 68, height: 68, background: '#fff', borderRadius: 12, border: '1px solid #eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <Package size={28} color="#d1d5db" />
             </div>
@@ -222,14 +254,14 @@ export default function Products() {
                         style={{ width: 160, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: '#374151' }}
                       />
                     </div>
-                    <button onClick={handleAdd} disabled={adding} style={{
-                      display: 'flex', alignItems: 'center', gap: 7,
-                      padding: '9px 20px', borderRadius: 11, border: 'none',
-                      background: adding ? '#e5e7eb' : 'linear-gradient(135deg,#10b981,#34d399)',
-                      color: adding ? '#9ca3af' : '#fff',
-                      fontSize: 13.5, fontWeight: 700, cursor: adding ? 'not-allowed' : 'pointer',
-                      boxShadow: adding ? 'none' : '0 4px 12px rgba(16,185,129,.3)',
-                    }}>
+                    <button onClick={handleAdd} disabled={adding}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 7,
+                        padding: '9px 20px', borderRadius: 11, border: 'none',
+                        background: adding ? '#e5e7eb' : 'linear-gradient(135deg,#10b981,#34d399)',
+                        color: adding ? '#9ca3af' : '#fff',
+                        fontSize: 13.5, fontWeight: 700, cursor: adding ? 'not-allowed' : 'pointer',
+                      }}>
                       {adding ? <Loader2 size={14} style={{ animation: 'spin .7s linear infinite' }} /> : <Plus size={14} />}
                       {adding ? 'Adding…' : 'Track Product'}
                     </button>
@@ -241,18 +273,17 @@ export default function Products() {
         )}
       </div>
 
-      {/* Products list */}
+      {/* Tracked products list */}
       <div style={{ ...card, overflow: 'hidden' }}>
-        <div style={{ padding: '18px 24px', borderBottom: '1.5px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
+        <div style={{ padding: '18px 24px', borderBottom: '1.5px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f1117', margin: 0 }}>All Products</h2>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f1117', margin: 0 }}>My Tracked Products</h2>
             <p style={{ fontSize: 12, color: '#9ca3af', margin: '3px 0 0' }}>
-              {filtered.length} of {products.length} product{products.length !== 1 ? 's' : ''}
-              {localSearch ? ` matching "${localSearch}"` : ' in database'}
+              {filtered.length} of {tracked.length} product{tracked.length !== 1 ? 's' : ''}
+              {localSearch ? ` matching "${localSearch}"` : ''}
             </p>
           </div>
-          {/* Local search filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8f9fc', border: '1.5px solid #eef0f6', borderRadius: 11, padding: '8px 14px', minWidth: 240 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8f9fc', border: '1.5px solid #eef0f6', borderRadius: 11, padding: '8px 14px', minWidth: isMobile ? '100%' : 220 }}>
             <Search size={13} color="#9ca3af" />
             <input
               type="text" value={localSearch}
@@ -261,7 +292,8 @@ export default function Products() {
               style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: '#374151' }}
             />
             {localSearch && (
-              <button onClick={handleSearchClear} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex' }}>
+              <button onClick={() => { setLocalSearch(''); setSearchParams({}); }}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex' }}>
                 <X size={12} color="#9ca3af" />
               </button>
             )}
@@ -276,102 +308,172 @@ export default function Products() {
           <div style={{ textAlign: 'center', padding: '64px 0' }}>
             <Package size={44} color="#e5e7eb" style={{ margin: '0 auto 12px' }} />
             <p style={{ fontSize: 14, fontWeight: 600, color: '#9ca3af', margin: 0 }}>
-              {localSearch ? `No products matching "${localSearch}"` : 'No products yet'}
+              {localSearch ? `No products matching "${localSearch}"` : 'No products tracked yet'}
             </p>
             <p style={{ fontSize: 12.5, color: '#c4c9d4', marginTop: 4 }}>
               {localSearch ? 'Try a different search term' : 'Paste an Amazon URL above to get started'}
             </p>
           </div>
         ) : isSmall ? (
-          /* ── Mobile / Tablet card list ── */
+          /* Mobile / Tablet card list */
           <div>
-            {filtered.map((p, idx) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '14px 18px', borderBottom: idx < filtered.length - 1 ? '1px solid #f9fafb' : 'none' }}>
-                <ProductImage src={p.image_url} size={46} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13.5, fontWeight: 700, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.title ?? p.asin}
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                    {p.current_price
-                      ? <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>₹{Number(p.current_price).toLocaleString('en-IN')}</span>
-                      : <span style={{ fontSize: 11.5, color: '#c4c9d4' }}>Not scraped yet</span>
-                    }
-                    <span style={{ fontSize: 10.5, background: '#eff6ff', color: '#3b82f6', padding: '2px 8px', borderRadius: 20, fontWeight: 600, textTransform: 'capitalize' as const }}>{p.retailer}</span>
+            {filtered.map((item, idx) => {
+              const cur = item.current_price ? parseFloat(item.current_price) : null;
+              const tgt = item.target_price  ? parseFloat(item.target_price)  : null;
+              const hit = cur !== null && tgt !== null && cur <= tgt;
+              const isEditing = editingId === item.id;
+              return (
+                <div key={item.id} style={{ padding: '14px 18px', borderBottom: idx < filtered.length - 1 ? '1px solid #f9fafb' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <ProductImage src={item.image_url} size={46} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title ?? item.asin}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: hit ? '#10b981' : '#111827' }}>
+                          {cur ? `₹${cur.toLocaleString('en-IN')}` : '—'}
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: item.is_active ? '#ecfdf5' : '#f3f4f6', color: item.is_active ? '#059669' : '#9ca3af' }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: item.is_active ? '#10b981' : '#d1d5db' }} />
+                          {item.is_active ? 'Active' : 'Paused'}
+                        </span>
+                      </div>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                          <input
+                            autoFocus type="number" value={editTarget}
+                            onChange={e => setEditTarget(e.target.value)}
+                            placeholder="Target price ₹"
+                            style={{ width: 120, padding: '5px 9px', borderRadius: 8, border: '1.5px solid #6c63ff', fontSize: 12, outline: 'none' }}
+                          />
+                          <button onClick={() => handleSaveTarget(item)} disabled={savingId === item.id}
+                            style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: '#6c63ff', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            {savingId === item.id ? '…' : 'Save'}
+                          </button>
+                          <button onClick={() => setEditingId(null)}
+                            style={{ padding: '5px 8px', borderRadius: 8, border: '1px solid #eef0f6', background: '#fff', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>✕</button>
+                        </div>
+                      ) : tgt ? (
+                        <p style={{ fontSize: 11.5, color: '#9ca3af', margin: '4px 0 0' }}>
+                          Target: ₹{tgt.toLocaleString('en-IN')}
+                          <button onClick={() => { setEditingId(item.id); setEditTarget(String(tgt)); }}
+                            style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#6c63ff', fontSize: 11, padding: 0 }}>Edit</button>
+                        </p>
+                      ) : (
+                        <button onClick={() => { setEditingId(item.id); setEditTarget(''); }}
+                          style={{ fontSize: 11.5, color: '#6c63ff', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0 0', textDecoration: 'underline' }}>
+                          + Set target price
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                      <a href={item.url} target="_blank" rel="noreferrer"
+                        style={{ display: 'inline-flex', padding: 7, borderRadius: 8, background: '#f3f4f6', color: '#9ca3af' }}>
+                        <ExternalLink size={13} />
+                      </a>
+                      <button onClick={() => handleDelete(item)} disabled={deletingId === item.id}
+                        style={{ display: 'inline-flex', padding: 7, borderRadius: 8, border: '1px solid #fee2e2', background: '#fff', color: '#ef4444', cursor: 'pointer' }}>
+                        {deletingId === item.id ? <Loader2 size={13} style={{ animation: 'spin .7s linear infinite' }} /> : <Trash2 size={13} />}
+                      </button>
+                    </div>
                   </div>
-                  <a href={p.url} target="_blank" rel="noreferrer"
-                    style={{ fontSize: 11, color: '#6c63ff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 3 }}>
-                    <ExternalLink size={9} /> View on Amazon
-                  </a>
                 </div>
-                <button
-                  onClick={() => handleTrack(p.id)}
-                  disabled={trackingId === p.id}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
-                    padding: '8px 14px', borderRadius: 10, border: 'none',
-                    background: trackingId === p.id ? '#f3f4f6' : '#eef2ff',
-                    color: trackingId === p.id ? '#9ca3af' : '#6c63ff',
-                    fontSize: 12, fontWeight: 700, cursor: trackingId === p.id ? 'not-allowed' : 'pointer',
-                  }}>
-                  {trackingId === p.id
-                    ? <Loader2 size={12} style={{ animation: 'spin .7s linear infinite' }} />
-                    : <Bell size={12} />
-                  }
-                  {!isMobile && (trackingId === p.id ? 'Tracking…' : 'Track')}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          /* ── Desktop table ── */
+          /* Desktop table */
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#fafbfc' }}>
-                {['Product', 'ASIN', 'Current Price', 'Retailer', 'Action'].map((h, i) => (
+                {['Product', 'Current Price', 'Target Price', 'Status', 'Actions'].map((h, i) => (
                   <th key={i} style={{ padding: '11px 20px', fontSize: 11.5, fontWeight: 600, color: '#9ca3af', textAlign: i === 0 ? 'left' : 'center', borderBottom: '1.5px solid #f3f4f6', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p, idx) => (
-                <tr key={p.id} style={{ borderBottom: idx < filtered.length - 1 ? '1px solid #f9fafb' : 'none' }}>
-                  <td style={{ padding: '14px 20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <ProductImage src={p.image_url} size={42} />
-                      <div>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: 0, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {p.title ?? p.asin}
-                        </p>
-                        <a href={p.url} target="_blank" rel="noreferrer"
-                          style={{ fontSize: 11, color: '#6c63ff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 3 }}>
-                          <ExternalLink size={10} /> View on Amazon
-                        </a>
+              {filtered.map((item, idx) => {
+                const cur = item.current_price ? parseFloat(item.current_price) : null;
+                const tgt = item.target_price  ? parseFloat(item.target_price)  : null;
+                const hit = cur !== null && tgt !== null && cur <= tgt;
+                const isEditing = editingId === item.id;
+                return (
+                  <tr key={item.id} style={{ borderBottom: idx < filtered.length - 1 ? '1px solid #f9fafb' : 'none' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#fafbfc')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <td style={{ padding: '13px 20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <ProductImage src={item.image_url} size={42} />
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: 0, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.title ?? item.asin}
+                          </p>
+                          <a href={item.url} target="_blank" rel="noreferrer"
+                            style={{ fontSize: 11, color: '#6c63ff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 3 }}>
+                            <ExternalLink size={10} /> View on Amazon
+                          </a>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                    <span style={{ fontSize: 11.5, fontFamily: 'monospace', background: '#f3f4f6', padding: '3px 9px', borderRadius: 6, color: '#6b7280', letterSpacing: '.5px' }}>{p.asin}</span>
-                  </td>
-                  <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                    {p.current_price
-                      ? <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>₹{Number(p.current_price).toLocaleString('en-IN')}</span>
-                      : <span style={{ fontSize: 11.5, color: '#c4c9d4', display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e5e7eb' }} />Not scraped yet</span>
-                    }
-                  </td>
-                  <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                    <span style={{ fontSize: 11.5, background: '#eff6ff', color: '#3b82f6', padding: '4px 11px', borderRadius: 20, fontWeight: 600, textTransform: 'capitalize' as const }}>{p.retailer}</span>
-                  </td>
-                  <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                    <button onClick={() => handleTrack(p.id)} disabled={trackingId === p.id}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 10, border: 'none', background: trackingId === p.id ? '#f3f4f6' : '#eef2ff', color: trackingId === p.id ? '#9ca3af' : '#6c63ff', fontSize: 12.5, fontWeight: 700, cursor: trackingId === p.id ? 'not-allowed' : 'pointer' }}>
-                      {trackingId === p.id
-                        ? <><Loader2 size={12} style={{ animation: 'spin .7s linear infinite' }} /> Tracking…</>
-                        : <><Bell size={12} /> Track</>}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={{ padding: '13px 20px', textAlign: 'center' }}>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: hit ? '#10b981' : '#111827' }}>
+                        {cur ? `₹${cur.toLocaleString('en-IN')}` : '—'}
+                      </span>
+                      {hit && <span style={{ fontSize: 10, background: '#dcfce7', color: '#16a34a', padding: '2px 7px', borderRadius: 20, fontWeight: 800, marginLeft: 6 }}>Hit!</span>}
+                    </td>
+                    <td style={{ padding: '13px 20px', textAlign: 'center' }}>
+                      {isEditing ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <input autoFocus type="number" value={editTarget}
+                            onChange={e => setEditTarget(e.target.value)}
+                            placeholder="₹ amount"
+                            style={{ width: 100, padding: '6px 10px', borderRadius: 8, border: '1.5px solid #6c63ff', fontSize: 12.5, outline: 'none', textAlign: 'center' }}
+                          />
+                          <button onClick={() => handleSaveTarget(item)} disabled={savingId === item.id}
+                            style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: '#6c63ff', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                            {savingId === item.id ? <Loader2 size={12} style={{ animation: 'spin .7s linear infinite' }} /> : <Check size={12} />}
+                          </button>
+                          <button onClick={() => setEditingId(null)}
+                            style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #eef0f6', background: '#fff', color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13, color: tgt ? '#374151' : '#d1d5db', fontWeight: tgt ? 600 : 400 }}>
+                            {tgt ? `₹${tgt.toLocaleString('en-IN')}` : 'Not set'}
+                          </span>
+                          <button onClick={() => { setEditingId(item.id); setEditTarget(tgt ? String(tgt) : ''); }}
+                            style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #eef0f6', background: '#f9fafb', color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                            <Edit2 size={11} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: '13px 20px', textAlign: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, padding: '5px 12px', borderRadius: 20, background: item.is_active ? '#ecfdf5' : '#f3f4f6', color: item.is_active ? '#059669' : '#9ca3af' }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: item.is_active ? '#10b981' : '#d1d5db' }} />
+                        {item.is_active ? 'Active' : 'Paused'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '13px 16px', textAlign: 'center' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <button onClick={() => handleToggleActive(item)} disabled={savingId === item.id} title={item.is_active ? 'Pause tracking' : 'Resume tracking'}
+                          style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid #eef0f6', background: '#f9fafb', color: item.is_active ? '#f59e0b' : '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                          {savingId === item.id
+                            ? <Loader2 size={13} style={{ animation: 'spin .7s linear infinite' }} />
+                            : item.is_active ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
+                        </button>
+                        <button onClick={() => handleDelete(item)} disabled={deletingId === item.id} title="Stop tracking"
+                          style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid #fee2e2', background: '#fff', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                          {deletingId === item.id ? <Loader2 size={13} style={{ animation: 'spin .7s linear infinite' }} /> : <Trash2 size={13} />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

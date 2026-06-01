@@ -9,14 +9,12 @@ import Products from './pages/Products';
 import Alerts from './pages/Alerts';
 import History from './pages/History';
 import Categories from './pages/Categories';
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-center h-64">
-      <p className="text-gray-400 text-sm">{title} — coming soon</p>
-    </div>
-  );
-}
+import Deals from './pages/Deals';
+import Reports from './pages/Reports';
+import Settings from './pages/Settings';
+import Billing from './pages/Billing';
+import Support from './pages/Support';
+import Integrations from './pages/Integrations';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -39,12 +37,12 @@ export default function App() {
                 <Route path="/alerts"       element={<Alerts />} />
                 <Route path="/history"      element={<History />} />
                 <Route path="/categories"   element={<Categories />} />
-                <Route path="/deals"        element={<Placeholder title="Top Deals" />} />
-                <Route path="/reports"      element={<Placeholder title="Reports" />} />
-                <Route path="/integrations" element={<Placeholder title="Integrations" />} />
-                <Route path="/settings"     element={<Placeholder title="Settings" />} />
-                <Route path="/billing"      element={<Placeholder title="Billing" />} />
-                <Route path="/support"      element={<Placeholder title="Help & Support" />} />
+                <Route path="/deals"        element={<Deals />} />
+                <Route path="/reports"      element={<Reports />} />
+                <Route path="/integrations" element={<Integrations />} />
+                <Route path="/settings"     element={<Settings />} />
+                <Route path="/billing"      element={<Billing />} />
+                <Route path="/support"      element={<Support />} />
                 <Route path="*"             element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </Layout>

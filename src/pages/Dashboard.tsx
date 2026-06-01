@@ -35,14 +35,6 @@ const MOCK_HISTORY = [
   { date: 'Jun 1', price: 19990 },
 ];
 
-const PIE_DATA = [
-  { name: 'Active',    value: 6, color: '#34d399' },
-  { name: 'Triggered', value: 3, color: '#fbbf24' },
-  { name: 'Expired',   value: 1, color: '#f87171' },
-  { name: 'Paused',    value: 1, color: '#d1d5db' },
-];
-const PIE_TOTAL = PIE_DATA.reduce((a, b) => a + b.value, 0);
-
 const SPARKLINE_UP   = [10, 12, 11, 14, 13, 15, 14, 16];
 const SPARKLINE_DOWN = [16, 15, 14, 13, 12, 11, 11, 10];
 const TIME_FILTERS   = ['1M', '3M', '6M', '1Y', 'All'];
@@ -103,6 +95,17 @@ export default function Dashboard() {
 
   const totalSaved = alerts.reduce((acc, a) =>
     acc + Math.max(0, parseFloat(a.target_price) - parseFloat(a.triggered_price)), 0);
+
+  const activeTracked  = tracked.filter(t => t.is_active).length;
+  const pausedTracked  = tracked.filter(t => !t.is_active).length;
+  const withTarget     = tracked.filter(t => t.is_active && t.target_price).length;
+  const pieData = [
+    { name: 'Active',      value: activeTracked,          color: '#34d399' },
+    { name: 'With Target', value: withTarget,             color: '#818cf8' },
+    { name: 'Triggered',   value: alerts.length,          color: '#fbbf24' },
+    { name: 'Paused',      value: pausedTracked,          color: '#d1d5db' },
+  ].filter(d => d.value > 0);
+  const pieTotal = pieData.reduce((a, b) => a + b.value, 0);
 
   const displayName = user?.email?.split('@')[0] ?? 'User';
   const hour = new Date().getHours();
@@ -447,20 +450,25 @@ export default function Dashboard() {
           <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px' }}>Breakdown of your price alerts</p>
 
           <div style={{ display: 'flex', justifyContent: 'center', position: 'relative', marginBottom: 8 }}>
-            <PieChart width={170} height={170}>
-              <Pie data={PIE_DATA} cx={81} cy={81} innerRadius={52} outerRadius={76}
-                paddingAngle={3} dataKey="value" strokeWidth={0}>
-                {PIE_DATA.map((e, i) => <Cell key={i} fill={e.color} />)}
-              </Pie>
-            </PieChart>
+            {pieTotal > 0 ? (
+              <PieChart width={170} height={170}>
+                <Pie data={pieData} cx={81} cy={81} innerRadius={52} outerRadius={76}
+                  paddingAngle={3} dataKey="value" strokeWidth={0}>
+                  {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                </Pie>
+              </PieChart>
+            ) : (
+              <div style={{ width: 170, height: 170, borderRadius: '50%', border: '14px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              </div>
+            )}
             <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-              <p style={{ fontSize: 32, fontWeight: 900, color: '#0f1117', margin: 0, lineHeight: 1, letterSpacing: '-1.5px' }}>{PIE_TOTAL}</p>
-              <p style={{ fontSize: 11, color: '#9ca3af', margin: '5px 0 0', fontWeight: 500 }}>Total Alerts</p>
+              <p style={{ fontSize: 32, fontWeight: 900, color: '#0f1117', margin: 0, lineHeight: 1, letterSpacing: '-1.5px' }}>{tracked.length}</p>
+              <p style={{ fontSize: 11, color: '#9ca3af', margin: '5px 0 0', fontWeight: 500 }}>Tracked</p>
             </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-            {PIE_DATA.map(d => (
+            {pieTotal > 0 ? pieData.map(d => (
               <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                   <span style={{ width: 9, height: 9, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
@@ -468,10 +476,12 @@ export default function Dashboard() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{d.value}</span>
-                  <span style={{ fontSize: 11, color: '#c4c9d4', minWidth: 40, textAlign: 'right' }}>({Math.round((d.value / PIE_TOTAL) * 100)}%)</span>
+                  <span style={{ fontSize: 11, color: '#c4c9d4', minWidth: 40, textAlign: 'right' }}>({Math.round((d.value / pieTotal) * 100)}%)</span>
                 </div>
               </div>
-            ))}
+            )) : (
+              <p style={{ fontSize: 13, color: '#d1d5db', textAlign: 'center', margin: 0 }}>No products tracked yet</p>
+            )}
           </div>
 
           <button onClick={() => navigate('/alerts')} style={{

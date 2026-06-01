@@ -7,13 +7,13 @@ import {
   TrendingDown, TrendingUp, Activity, Package,
   ChevronDown, BarChart2, AlertCircle,
 } from 'lucide-react';
-import { getProducts } from '../api/products';
 import { getPriceHistory } from '../api/products';
+import { getTracking } from '../api/tracking';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import toast from 'react-hot-toast';
 
 interface Product {
-  id: string; asin: string; title: string | null;
+  id: string; product_id: string; asin: string; title: string | null;
   image_url: string | null; current_price: string | null;
   lowest_price: string | null; highest_price: string | null;
 }
@@ -65,12 +65,12 @@ export default function History() {
   const [activeFilter, setActiveFilter] = useState('3M');
   const [showSelector, setShowSelector] = useState(false);
 
-  /* load product list */
+  /* load user's tracked products */
   useEffect(() => {
-    getProducts()
-      .then(d => {
-        setProducts(d.data);
-        if (d.data.length) setSelectedId(d.data[0].id);
+    getTracking()
+      .then((data: Product[]) => {
+        setProducts(data);
+        if (data.length) setSelectedId(data[0].product_id);
       })
       .catch(() => toast.error('Failed to load products'))
       .finally(() => setLoadingProducts(false));
@@ -81,13 +81,13 @@ export default function History() {
     if (!selectedId) return;
     setLoadingHistory(true);
     const tf = TIME_FILTERS.find(f => f.label === activeFilter)!;
-    getPriceHistory(selectedId, fromDate(tf.months))
+    getPriceHistory(selectedId, fromDate(tf.months), 200)
       .then(d => setHistory(d.data ?? []))
       .catch(() => toast.error('Failed to load price history'))
       .finally(() => setLoadingHistory(false));
   }, [selectedId, activeFilter]);
 
-  const selected = products.find(p => p.id === selectedId);
+  const selected = products.find(p => p.product_id === selectedId);
 
   const chartData = useMemo(() =>
     [...history]
@@ -178,22 +178,22 @@ export default function History() {
                   boxShadow: '0 12px 40px rgba(0,0,0,.12)', overflow: 'hidden', maxHeight: 280, overflowY: 'auto',
                 }}>
                   {products.map((p, i) => (
-                    <button key={p.id}
-                      onClick={() => { setSelectedId(p.id); setShowSelector(false); }}
+                    <button key={p.product_id}
+                      onClick={() => { setSelectedId(p.product_id); setShowSelector(false); }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 12, width: '100%',
                         padding: '12px 16px', border: 'none', textAlign: 'left', cursor: 'pointer',
-                        background: p.id === selectedId ? '#eef2ff' : 'transparent',
+                        background: p.product_id === selectedId ? '#eef2ff' : 'transparent',
                         borderBottom: i < products.length - 1 ? '1px solid #f9fafb' : 'none',
                       }}
-                      onMouseEnter={e => { if (p.id !== selectedId) (e.currentTarget as HTMLButtonElement).style.background = '#fafbfc'; }}
-                      onMouseLeave={e => { if (p.id !== selectedId) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}>
+                      onMouseEnter={e => { if (p.product_id !== selectedId) (e.currentTarget as HTMLButtonElement).style.background = '#fafbfc'; }}
+                      onMouseLeave={e => { if (p.product_id !== selectedId) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}>
                       {p.image_url
                         ? <img src={p.image_url} alt="" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 9, background: '#f9fafb', padding: 3, border: '1px solid #eef0f6', flexShrink: 0 }} />
                         : <div style={{ width: 36, height: 36, borderRadius: 9, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Package size={14} color="#d1d5db" /></div>
                       }
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: p.id === selectedId ? '#6c63ff' : '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: p.product_id === selectedId ? '#6c63ff' : '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {p.title ?? p.asin}
                         </p>
                         <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>ASIN: {p.asin}</p>

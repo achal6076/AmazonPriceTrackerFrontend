@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { getProfile, updateProfile } from '../api/auth';
+import api from '../api/client';
 import { useAuthStore } from '../store/auth';
-import { User, Lock, Bell, Shield, CheckCircle, Eye, EyeOff, LogOut } from 'lucide-react';
+import { User, Lock, Bell, Shield, CheckCircle, Eye, EyeOff, LogOut, Send } from 'lucide-react';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import toast from 'react-hot-toast';
 
@@ -59,6 +60,7 @@ export default function Settings() {
   const [showNew, setShowNew] = useState(false);
   const [savingPwd, setSavingPwd] = useState(false);
   const [pwdFocus, setPwdFocus] = useState<string | null>(null);
+  const [sendingTest, setSendingTest] = useState(false);
 
   const [notifEmail, setNotifEmail] = useState(true);
   const [notifInstant, setNotifInstant] = useState(true);
@@ -253,8 +255,34 @@ export default function Settings() {
         </Section>
 
         {/* Security */}
-        <Section icon={Shield} iconColor="#ec4899" iconBg="#fdf2f8" title="Security" subtitle="Manage your account security">
+        <Section icon={Shield} iconColor="#ec4899" iconBg="#fdf2f8" title="Security" subtitle="Manage your account security and test notifications">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Test email */}
+            <div style={{ padding: '14px 16px', background: '#f0fdf4', borderRadius: 12, border: '1px solid #d1fae5' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <p style={{ fontSize: 13.5, fontWeight: 600, color: '#0f1117', margin: 0 }}>Test Email Notifications</p>
+                  <p style={{ fontSize: 12, color: '#9ca3af', margin: '2px 0 0' }}>Send a test email to verify your SMTP setup</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    setSendingTest(true);
+                    try {
+                      await api.post('/auth/test-email');
+                      toast.success('Test email sent! Check your inbox.');
+                    } catch {
+                      toast.error('Failed to send test email. Check SMTP settings.');
+                    } finally {
+                      setSendingTest(false);
+                    }
+                  }}
+                  disabled={sendingTest}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: sendingTest ? '#d1fae5' : '#10b981', border: 'none', borderRadius: 8, color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: sendingTest ? 'not-allowed' : 'pointer' }}>
+                  <Send size={13} /> {sendingTest ? 'Sending…' : 'Send Test'}
+                </button>
+              </div>
+            </div>
+
             <div style={{ padding: '14px 16px', background: '#f9fafb', borderRadius: 12, border: '1px solid #f0f0f0' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>

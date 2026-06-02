@@ -158,7 +158,7 @@ export default function Login() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Password</label>
-                <a href="#" style={{ fontSize: 12, color: '#6c63ff', textDecoration: 'none', fontWeight: 600 }}>Forgot password?</a>
+                <Link to="/forgot-password" style={{ fontSize: 12, color: '#6c63ff', textDecoration: 'none', fontWeight: 600 }}>Forgot password?</Link>
               </div>
               <div style={{ position: 'relative' }}>
                 <Lock size={16} color={focused === 'password' ? '#6c63ff' : '#9ca3af'}

@@ -12,6 +12,13 @@ export const getProfile = () => api.get('/auth/me').then((r) => r.data);
 
 export const updateProfile = (data: {
   name?: string;
+  whatsapp_number?: string | null;
   current_password?: string;
   new_password?: string;
 }) => api.patch('/auth/me', data).then((r) => r.data);
+
+export const getWhatsAppStatus = () =>
+  api.get('/auth/whatsapp/status').then((r) => r.data as { status: string; qrBase64: string | null });
+
+export const testWhatsApp = () =>
+  api.post('/auth/whatsapp/test').then((r) => r.data);

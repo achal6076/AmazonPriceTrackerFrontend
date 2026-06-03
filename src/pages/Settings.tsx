@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { getProfile, updateProfile } from '../api/auth';
+import { getProfile, updateProfile, getWhatsAppStatus, testWhatsApp } from '../api/auth';
 import api from '../api/client';
 import { useAuthStore } from '../store/auth';
-import { User, Lock, Bell, Shield, CheckCircle, Eye, EyeOff, LogOut, Send } from 'lucide-react';
+import { User, Lock, Bell, Shield, CheckCircle, Eye, EyeOff, LogOut, Send, MessageCircle, RefreshCw } from 'lucide-react';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import toast from 'react-hot-toast';
 
@@ -46,7 +46,7 @@ function Section({ icon: Icon, iconColor, iconBg, title, subtitle, children }: {
 export default function Settings() {
   const { isMobile } = useBreakpoint();
   const clearAuth = useAuthStore((s) => s.clearAuth);
-  const [profile, setProfile] = useState<{ id: string; email: string; name: string | null; created_at: string } | null>(null);
+  const [profile, setProfile] = useState<{ id: string; email: string; name: string | null; whatsapp_number: string | null; created_at: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [name, setName] = useState('');
@@ -66,14 +66,27 @@ export default function Settings() {
   const [notifInstant, setNotifInstant] = useState(true);
   const [notifDigest, setNotifDigest] = useState(false);
 
+  const [waNumber, setWaNumber] = useState('');
+  const [savingWa, setSavingWa] = useState(false);
+  const [waStatus, setWaStatus] = useState<{ status: string; qrBase64: string | null }>({ status: 'initializing', qrBase64: null });
+  const [testingWa, setTestingWa] = useState(false);
+
   useEffect(() => {
     getProfile()
       .then((p) => {
         setProfile(p);
         setName(p.name ?? '');
+        setWaNumber(p.whatsapp_number ?? '');
       })
       .catch(() => toast.error('Failed to load profile'))
       .finally(() => setLoading(false));
+
+    getWhatsAppStatus().then(setWaStatus).catch(() => {});
+
+    const poll = setInterval(() => {
+      getWhatsAppStatus().then(setWaStatus).catch(() => {});
+    }, 5000);
+    return () => clearInterval(poll);
   }, []);
 
   async function handleSaveProfile(e: React.FormEvent) {
@@ -103,6 +116,20 @@ export default function Settings() {
       toast.error(err?.response?.data?.error ?? 'Failed to change password');
     } finally {
       setSavingPwd(false);
+    }
+  }
+
+  async function handleSaveWhatsApp(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingWa(true);
+    try {
+      const updated = await updateProfile({ whatsapp_number: waNumber.trim() || null });
+      setProfile(updated);
+      toast.success('WhatsApp number saved');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error ?? 'Failed to save number');
+    } finally {
+      setSavingWa(false);
     }
   }
 
@@ -251,6 +278,84 @@ export default function Settings() {
                 </button>
               </div>
             ))}
+          </div>
+        </Section>
+
+        {/* WhatsApp */}
+        <Section icon={MessageCircle} iconColor="#25d366" iconBg="#f0fdf4" title="WhatsApp Notifications" subtitle="Get price alerts on WhatsApp">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Status banner */}
+            {waStatus.status === 'ready' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#f0fdf4', borderRadius: 12, border: '1px solid #bbf7d0' }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#15803d', margin: 0 }}>WhatsApp Connected</p>
+                  <p style={{ fontSize: 11.5, color: '#6b7280', margin: 0 }}>Ready to send notifications</p>
+                </div>
+              </div>
+            ) : waStatus.status === 'qr' && waStatus.qrBase64 ? (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', margin: '0 0 10px' }}>Scan with WhatsApp to connect</p>
+                <img src={waStatus.qrBase64} alt="WhatsApp QR" style={{ width: 180, height: 180, borderRadius: 12, border: '1px solid #e5e7eb' }} />
+                <p style={{ fontSize: 11.5, color: '#9ca3af', margin: '8px 0 0' }}>Open WhatsApp → Linked Devices → Link a Device</p>
+                <button onClick={() => getWhatsAppStatus().then(setWaStatus).catch(() => {})}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '6px 12px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12, color: '#6b7280', cursor: 'pointer' }}>
+                  <RefreshCw size={12} /> Refresh status
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#fafafa', borderRadius: 12, border: '1px solid #e5e7eb' }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', margin: 0 }}>
+                    {waStatus.status === 'initializing' ? 'WhatsApp initializing…' : waStatus.status === 'disconnected' ? 'WhatsApp disconnected' : 'WhatsApp unavailable'}
+                  </p>
+                  <p style={{ fontSize: 11.5, color: '#9ca3af', margin: 0 }}>Restart the server to see the QR code</p>
+                </div>
+              </div>
+            )}
+
+            {/* Phone number form */}
+            <form onSubmit={handleSaveWhatsApp} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <label style={labelStyle}>Your WhatsApp Number</label>
+                <input
+                  value={waNumber}
+                  onChange={(e) => setWaNumber(e.target.value)}
+                  onFocus={() => setProfileFocus('wa')}
+                  onBlur={() => setProfileFocus(null)}
+                  placeholder="+919876543210"
+                  style={inputStyle(profileFocus === 'wa')}
+                />
+                <p style={{ fontSize: 11.5, color: '#c4c9d4', margin: '5px 0 0' }}>Include country code, e.g. +91 for India</p>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="submit" disabled={savingWa}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 0', background: savingWa ? '#bbf7d0' : 'linear-gradient(135deg,#22c55e,#4ade80)', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: savingWa ? 'not-allowed' : 'pointer' }}>
+                  {savingWa ? 'Saving…' : <><CheckCircle size={14} /> Save Number</>}
+                </button>
+                {profile?.whatsapp_number && (
+                  <button type="button"
+                    disabled={testingWa || waStatus.status !== 'ready'}
+                    onClick={async () => {
+                      setTestingWa(true);
+                      try {
+                        await testWhatsApp();
+                        toast.success('WhatsApp test message sent!');
+                      } catch (err: any) {
+                        toast.error(err?.response?.data?.error ?? 'Test failed');
+                      } finally {
+                        setTestingWa(false);
+                      }
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', background: (testingWa || waStatus.status !== 'ready') ? '#f3f4f6' : '#fff', border: `1px solid ${waStatus.status === 'ready' ? '#22c55e' : '#e5e7eb'}`, borderRadius: 10, color: waStatus.status === 'ready' ? '#15803d' : '#9ca3af', fontSize: 13, fontWeight: 600, cursor: (testingWa || waStatus.status !== 'ready') ? 'not-allowed' : 'pointer' }}>
+                    <Send size={13} /> {testingWa ? 'Sending…' : 'Test'}
+                  </button>
+                )}
+              </div>
+            </form>
+
           </div>
         </Section>
 

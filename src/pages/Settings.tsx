@@ -81,12 +81,19 @@ export default function Settings() {
       .catch(() => toast.error('Failed to load profile'))
       .finally(() => setLoading(false));
 
-    getWhatsAppStatus().then(setWaStatus).catch(() => {});
-
-    const poll = setInterval(() => {
-      getWhatsAppStatus().then(setWaStatus).catch(() => {});
-    }, 5000);
-    return () => clearInterval(poll);
+    getWhatsAppStatus().then((s) => {
+      setWaStatus(s);
+      // Only poll when waiting for QR scan
+      if (s.status === 'qr' || s.status === 'initializing') {
+        const poll = setInterval(() => {
+          getWhatsAppStatus().then((s2) => {
+            setWaStatus(s2);
+            if (s2.status !== 'qr' && s2.status !== 'initializing') clearInterval(poll);
+          }).catch(() => {});
+        }, 5000);
+        return () => clearInterval(poll);
+      }
+    }).catch(() => {});
   }, []);
 
   async function handleSaveProfile(e: React.FormEvent) {

@@ -7,7 +7,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import {
-  Target, Bell, TrendingDown, Wallet,
+  Bell, TrendingDown, Wallet,
   ArrowUpRight, ExternalLink, Package,
   Plus, Activity, ChevronRight, Zap,
   MoreHorizontal, ShoppingBag,

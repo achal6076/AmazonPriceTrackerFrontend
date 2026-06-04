@@ -54,7 +54,7 @@ function ChartTip({ active, payload, label }: any) {
 }
 
 export default function History() {
-  const { isMobile, isTablet } = useBreakpoint();
+  const { isMobile } = useBreakpoint();
 
   const [products, setProducts]     = useState<Product[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');

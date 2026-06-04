@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getAlerts } from '../api/tracking';
-import { Bell, TrendingDown, ExternalLink, Package, ChevronRight, BadgeCheck } from 'lucide-react';
+import { Bell, TrendingDown, ExternalLink, BadgeCheck } from 'lucide-react';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import toast from 'react-hot-toast';
 

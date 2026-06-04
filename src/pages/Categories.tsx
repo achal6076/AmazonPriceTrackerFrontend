@@ -261,7 +261,7 @@ export default function Categories() {
                     disabled={deletingId === cat.id}
                     style={{
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 36, height: 36, borderRadius: 10, border: 'none',
+                      width: 36, height: 36, borderRadius: 10,
                       background: deletingId === cat.id ? '#f3f4f6' : '#fff',
                       border: '1.5px solid #eef0f6',
                       color: '#9ca3af', cursor: deletingId === cat.id ? 'not-allowed' : 'pointer',

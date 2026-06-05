@@ -87,7 +87,13 @@ export default function Products() {
     setPreview(null);
     setPreviewError('');
     try {
-      setPreview(await previewScrape(url));
+      const result = await previewScrape(url);
+      // Check if already tracked before showing the preview
+      if (tracked.some(t => t.asin === result.asin)) {
+        setPreviewError('already_tracking');
+      } else {
+        setPreview(result);
+      }
     } catch (err: any) {
       const msg = err.response?.data?.error ?? 'Could not fetch product. Amazon may be blocking the request.';
       setPreviewError(msg);
@@ -99,11 +105,16 @@ export default function Products() {
 
   const handleAdd = async () => {
     if (!preview) return;
+    // Guard: don't add if already tracking this ASIN
+    if (tracked.some(t => t.asin === preview.asin)) {
+      toast.error('You\'re already tracking this product');
+      setUrl(''); setPreview(null); setTargetPrice(''); setPreviewError('');
+      return;
+    }
     setAdding(true);
     try {
       const product = await addProduct({ asin: preview.asin, url: preview.url, title: preview.title ?? undefined });
       const trackEntry = await startTracking(product.id, targetPrice ? parseFloat(targetPrice) : undefined);
-      // Merge product fields into the tracking entry for display
       setTracked(prev => [{
         ...trackEntry,
         asin: product.asin,
@@ -116,7 +127,13 @@ export default function Products() {
       toast.success('Product added and tracking started!');
       setUrl(''); setPreview(null); setTargetPrice(''); setPreviewError('');
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? 'Failed to add product');
+      const msg = err.response?.data?.error ?? 'Failed to add product';
+      if (err.response?.status === 409) {
+        toast.error('You\'re already tracking this product');
+        setUrl(''); setPreview(null); setTargetPrice(''); setPreviewError('');
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setAdding(false);
     }
@@ -218,7 +235,15 @@ export default function Products() {
           </button>
         </div>
 
-        {previewError && !preview && (
+        {previewError === 'already_tracking' ? (
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'flex-start', gap: 10, background: '#fefce8', border: '1.5px solid #fde68a', borderRadius: 12, padding: '12px 16px' }}>
+            <AlertCircle size={16} color="#d97706" style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <p style={{ fontSize: 12.5, fontWeight: 700, color: '#92400e', margin: 0 }}>Already tracking this product</p>
+              <p style={{ fontSize: 12, color: '#b45309', margin: '3px 0 0' }}>This product is already in your tracking list.</p>
+            </div>
+          </div>
+        ) : previewError && !preview && (
           <div style={{ marginTop: 12, display: 'flex', alignItems: 'flex-start', gap: 10, background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 12, padding: '12px 16px' }}>
             <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
             <div>

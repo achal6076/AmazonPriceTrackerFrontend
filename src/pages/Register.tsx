@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, Mail, Lock, ArrowRight, TrendingDown, Bell, BarChart2, Shield } from 'lucide-react';
 import { register } from '../api/auth';
 import { useAuthStore } from '../store/auth';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import toast from 'react-hot-toast';
 
 const features = [
@@ -15,6 +16,7 @@ const features = [
 export default function Register() {
   const navigate = useNavigate();
   const setAuth  = useAuthStore((s) => s.setAuth);
+  const { isMobile } = useBreakpoint();
   const [form, setForm]       = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
@@ -46,8 +48,8 @@ export default function Register() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
-      {/* ── Left panel ── */}
-      <div style={{
+      {/* ── Left panel (hidden on mobile) ── */}
+      {!isMobile && <div style={{
         flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
         padding: '60px 64px',
         background: 'linear-gradient(145deg, #0f1117 0%, #13152e 45%, #1a1d3a 100%)',
@@ -113,12 +115,12 @@ export default function Register() {
             Join <span style={{ color: '#a78bfa', fontWeight: 700 }}>2,400+</span> smart shoppers saving every day
           </p>
         </div>
-      </div>
+      </div>}
 
       {/* ── Right panel ── */}
       <div style={{
-        width: 480, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: '#f8f9fc', padding: '48px 52px',
+        width: isMobile ? '100%' : 480, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: '#f8f9fc', padding: isMobile ? '48px 24px' : '48px 52px',
       }}>
         <div style={{ width: '100%', maxWidth: 360 }}>
 

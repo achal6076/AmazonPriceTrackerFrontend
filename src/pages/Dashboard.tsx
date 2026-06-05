@@ -207,18 +207,18 @@ export default function Dashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: isSmall ? '1fr' : '1fr 300px', gap: 18 }}>
 
         {/* Price History */}
-        <div style={{ ...card, padding: isMobile ? '18px 16px 16px' : '24px 24px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ ...card, padding: isMobile ? '18px 16px 16px' : '24px 24px 20px', minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', gap: isMobile ? 10 : 0, marginBottom: 20 }}>
             <div>
               <h2 style={{ fontSize: 17, fontWeight: 800, color: '#0f1117', margin: 0 }}>Price History</h2>
               <p style={{ fontSize: 12, color: '#9ca3af', margin: '3px 0 0' }}>
                 {tracked.length === 0 ? 'Add products to see real price trends' : `${tracked[0]?.title?.slice(0, 40) ?? 'Product'}…`}
               </p>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
               {TIME_FILTERS.map(f => (
                 <button key={f} onClick={() => setActiveFilter(f)} style={{
-                  padding: '5px 12px', borderRadius: 9, fontSize: 12, fontWeight: 600,
+                  padding: '5px 10px', borderRadius: 9, fontSize: 12, fontWeight: 600,
                   border: 'none', cursor: 'pointer', transition: 'all .15s',
                   background: activeFilter === f ? '#6c63ff' : 'transparent',
                   color: activeFilter === f ? '#fff' : '#9ca3af',
@@ -262,7 +262,7 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Price Drops */}
-        <div style={{ ...card, padding: '22px 20px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ ...card, padding: '22px 20px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0f1117', margin: 0 }}>Recent Drops</h2>
             <Link to="/alerts" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 700, color: '#6c63ff', textDecoration: 'none' }}>
@@ -318,7 +318,7 @@ export default function Dashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: isSmall ? '1fr' : '1fr 300px', gap: 18 }}>
 
         {/* Tracked Products */}
-        <div style={{ ...card, overflow: 'hidden' }}>
+        <div style={{ ...card, overflow: 'hidden', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1.5px solid #f3f4f6' }}>
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0f1117', margin: 0 }}>Tracked Products</h2>
@@ -442,7 +442,7 @@ export default function Dashboard() {
         </div>
 
         {/* Price Alert Summary */}
-        <div style={{ ...card, padding: '22px 20px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ ...card, padding: '22px 20px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0f1117', margin: 0 }}>Alert Summary</h2>
             <span style={{ fontSize: 11, color: '#6c63ff', background: '#eef2ff', padding: '4px 10px', borderRadius: 20, fontWeight: 700 }}>Live</span>

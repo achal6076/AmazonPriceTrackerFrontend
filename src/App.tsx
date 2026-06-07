@@ -17,10 +17,19 @@ import Settings from './pages/Settings';
 import Billing from './pages/Billing';
 import Support from './pages/Support';
 import Integrations from './pages/Integrations';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, user } = useAuthStore();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
 }
 
 export default function App() {
@@ -32,6 +41,16 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/admin/*" element={
+          <AdminRoute>
+            <AdminLayout>
+              <Routes>
+                <Route path="/"  element={<AdminDashboard />} />
+                <Route path="*"  element={<Navigate to="/admin" replace />} />
+              </Routes>
+            </AdminLayout>
+          </AdminRoute>
+        } />
         <Route path="/*" element={
           <PrivateRoute>
             <Layout>

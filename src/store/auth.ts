@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 
 interface AuthState {
-  user: { id: string; email: string } | null;
+  user: { id: string; email: string; role?: 'user' | 'admin' } | null;
   isAuthenticated: boolean;
-  setAuth: (user: { id: string; email: string }, accessToken: string, refreshToken: string) => void;
+  setAuth: (user: { id: string; email: string; role?: 'user' | 'admin' }, accessToken: string, refreshToken: string) => void;
   clearAuth: () => void;
 }
 

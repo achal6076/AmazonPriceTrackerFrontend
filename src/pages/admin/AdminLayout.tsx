@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, ShieldCheck, ArrowLeft, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, ShieldCheck, ArrowLeft, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../../api/auth';
 import { useAuthStore } from '../../store/auth';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 
 const navItems = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/admin/users', icon: Users, label: 'Users' },
 ];
 
 const SIDEBAR_W = 220;

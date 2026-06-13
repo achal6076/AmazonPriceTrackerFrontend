@@ -19,6 +19,7 @@ import Support from './pages/Support';
 import Integrations from './pages/Integrations';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminUsers from './pages/admin/AdminUsers';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -45,8 +46,9 @@ export default function App() {
           <AdminRoute>
             <AdminLayout>
               <Routes>
-                <Route path="/"  element={<AdminDashboard />} />
-                <Route path="*"  element={<Navigate to="/admin" replace />} />
+                <Route path="/"      element={<AdminDashboard />} />
+                <Route path="/users" element={<AdminUsers />} />
+                <Route path="*"      element={<Navigate to="/admin" replace />} />
               </Routes>
             </AdminLayout>
           </AdminRoute>
